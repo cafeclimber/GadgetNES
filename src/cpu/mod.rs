@@ -1,3 +1,30 @@
-mod registers;
+#[derive(Debug)]
+struct Cpu {
+    a: u8, // Accumulator
 
-struct CPU {}
+    x: u8, // x-Index
+    y: u8, // y-index
+
+    pc: u16, // Program counter
+    
+    s: u8, // Stack pointer
+
+    p: u8, // Status register
+}
+
+impl Cpu {
+    pub fn new() -> Cpu {
+        Cpu {
+            a: 0,
+
+            x: 0,
+            y: 0,
+
+            pc: 0x0000,
+
+            s: 0,
+
+            p: 0, // TODO: Investigate what to set this to for power-on and reset
+        }
+    }
+}

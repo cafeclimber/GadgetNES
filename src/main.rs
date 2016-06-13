@@ -9,8 +9,6 @@ fn main() {
     let rom_name = env::args().nth(1).unwrap();
 
     let rom = read_cartridge(rom_name);
-
-    print!("{:?}", rom);
 }
 
 // Thanks to yupferris for this!
