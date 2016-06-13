@@ -8,7 +8,8 @@ My goal for this project is to become more familiar with Rust, develop my progra
 
 Documents
 ---------
-Will update as I find information I used.
+These are documents or websites I have found particularly useful during this project:
+* The NESdev Wiki: http://wiki.nesdev.com/w/index.php/Nesdev_Wiki
 
 License
 -------
