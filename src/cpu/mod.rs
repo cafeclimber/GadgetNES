@@ -1,5 +1,5 @@
 #[derive(Debug)]
-struct Cpu {
+pub struct Cpu {
     a: u8, // Accumulator
 
     x: u8, // x-Index
@@ -27,4 +27,6 @@ impl Cpu {
             p: 0, // TODO: Investigate what to set this to for power-on and reset
         }
     }
+
+    fn read_instruction() {}
 }

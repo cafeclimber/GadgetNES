@@ -9,6 +9,8 @@ fn main() {
     let rom_name = env::args().nth(1).unwrap();
 
     let rom = read_cartridge(rom_name);
+
+    let Cpu = cpu::Cpu::new();
 }
 
 // Thanks to yupferris for this!
