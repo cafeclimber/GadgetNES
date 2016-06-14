@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+mod nes;
 mod cpu;
 
 fn main() {
@@ -10,8 +11,10 @@ fn main() {
 
     let rom = read_cartridge(rom_name);
 
-    let cpu = cpu::Cpu::new();
-    println!("{:#?}", &cpu);
+    let mut nes = nes::Nes::new();
+    nes.power_up(&rom);
+    
+    println!("{:#?}", &nes);
 }
 
 // Thanks to yupferris for this!

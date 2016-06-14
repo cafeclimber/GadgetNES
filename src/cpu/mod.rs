@@ -1,30 +1,23 @@
-#[derive(Debug)]
+mod apu;
+mod cpu;
+
+#[derive(Default, Debug)]
 pub struct Cpu {
-    a: u8, // Accumulator
+    cpu: cpu::CpuCore,
+    apu: apu::Apu, 
 
-    x: u8, // x-Index
-    y: u8, // y-index
+    oamdma: u8, // $4014
 
-    pc: u16, // Program counter
-    
-    s: u8, // Stack pointer
-
-    p: u8, // Status register
+    joy1: u8, // $4016
+    joy2: u8, // $4017 also mapped by APU
 }
 
 impl Cpu {
-    pub fn new() -> Cpu {
-        Cpu {
-            a: 0,
+    pub fn power_up(&mut self) {
+        self.set_register(self.p, 0x34);
+        self.set_register(self.s, 0xfd);
 
-            x: 0,
-            y: 0,
-
-            pc: 0x0000,
-
-            s: 0xfd,
-
-            p: 0x34,
-        }
+        self.set_register(self.snd_chn); // all channels disabled
+        self.joy2 = 0x00; // set frame_irq to enable
     }
 }

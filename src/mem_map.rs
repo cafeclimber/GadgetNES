@@ -29,6 +29,3 @@ const APU_IO_REGS_END: u16 = 0x401f;
 const CARTIRIDGE_SPACE_BEG: u16 = 0x4020;
 const CARTIRIDGE_SPACE_SIZE: u16 = 0xbfe0;
 const CARTIRIDGE_SPACE_END: u16 = 0xfff;
-
-pub enum Addr {
-}
