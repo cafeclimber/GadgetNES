@@ -10,7 +10,8 @@ fn main() {
 
     let rom = read_cartridge(rom_name);
 
-    let Cpu = cpu::Cpu::new();
+    let cpu = cpu::Cpu::new();
+    println!("{:#?}", &cpu);
 }
 
 // Thanks to yupferris for this!

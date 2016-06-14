@@ -22,11 +22,9 @@ impl Cpu {
 
             pc: 0x0000,
 
-            s: 0,
+            s: 0xfd,
 
-            p: 0, // TODO: Investigate what to set this to for power-on and reset
+            p: 0x34,
         }
     }
-
-    fn read_instruction() {}
 }
