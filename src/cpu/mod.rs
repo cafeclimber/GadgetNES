@@ -3,7 +3,7 @@ mod cpu;
 
 #[derive(Default, Debug)]
 pub struct Cpu {
-    cpu: cpu::CpuCore,
+    cpu_core: cpu::CpuCore,
     apu: apu::Apu, 
 
     oamdma: u8, // $4014
@@ -14,10 +14,10 @@ pub struct Cpu {
 
 impl Cpu {
     pub fn power_up(&mut self) {
-        self.set_register(self.p, 0x34);
-        self.set_register(self.s, 0xfd);
+        self.cpu_core.p = 0x34;
+        self.cpu_core.s = 0xfd;
 
-        self.set_register(self.snd_chn); // all channels disabled
+        self.apu.snd_chn = 0x00 ; // all channels disabled
         self.joy2 = 0x00; // set frame_irq to enable
     }
 }

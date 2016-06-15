@@ -5,14 +5,15 @@ use std::path::Path;
 
 mod nes;
 mod cpu;
+mod mem;
 
 fn main() {
     let rom_name = env::args().nth(1).unwrap();
 
-    let rom = read_cartridge(rom_name);
+    let cart_rom = read_cartridge(rom_name);
 
     let mut nes = nes::Nes::new();
-    nes.power_up(&rom);
+    nes.power_up(&cart_rom);
     
     println!("{:#?}", &nes);
 }
