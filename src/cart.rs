@@ -6,5 +6,7 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    pub fn get_prg_rom_size(){} // TODO
+    pub fn load_cartridge(&mut self, cart_rom: Vec<u8>) {
+        self.prg_rom = cart_rom.into_boxed_slice();
+    }
 }
