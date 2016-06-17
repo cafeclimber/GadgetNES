@@ -13,3 +13,6 @@ pub struct Apu {
 
     pub frame_counter: u8, //$4017 also mapped by cpu
 }
+
+impl Apu {
+}

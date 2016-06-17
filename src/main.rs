@@ -5,6 +5,7 @@ use std::path::Path;
 
 mod nes;
 mod cpu;
+mod apu;
 mod mem;
 
 fn main() {
