@@ -1,20 +1,16 @@
 use cpu::Cpu;
-use apu::Apu;
 use cart::Cartridge;
 
 #[derive(Default)]
 pub struct Nes {
     cpu: Cpu,
-    apu: Apu,
-    //ppu: Ppu,
-    pub cart: Cartridge,
+    cart: Cartridge,
 }
 
 impl Nes {
     pub fn new() -> Nes {
         Nes {
-            cpu: Cpu::default(),
-            apu: Apu::default(),
+            cpu: Cpu::new(),
             cart: Cartridge::default(),
         }
     }
@@ -24,7 +20,21 @@ impl Nes {
         self.cart.load_cartridge(cart_rom);
 
         println!("{:#?}\n", self.cpu);
-        println!("{:#?}", self.apu);
     }
 
+    pub fn run(&mut self) {
+        loop {
+            let instr = self.read_instr();
+            self.run_instr(instr);
+        }
+    }
+
+    fn read_instr(&mut self) -> u8 {
+        let pc = self.cpu.pc;
+        self.cart.read_rom(&pc);
+    }
+
+    fn run_instr(&mut self, instr: u8) {
+        self.cpu.run_instr(instr);
+    }
 }
