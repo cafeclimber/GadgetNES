@@ -60,4 +60,4 @@ impl fmt::Debug for Cpu {
     }
 }
 
-fn map_instr(instr: u8);
+fn map_instr(instr: u8) {}
