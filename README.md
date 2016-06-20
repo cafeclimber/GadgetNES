@@ -11,7 +11,7 @@ Documents
 These are documents or websites I have found particularly useful during this project:
 * Yupferris' awesome Rustendo64 project: https://github.com/yupferris/rustendo64
 * The NESdev Wiki: http://wiki.nesdev.com/w/index.php/Nesdev_Wiki
-* Forum post on NintendoAge.com: http://nintendoage.com/forum/messageview.cfm?catid=22&threadid=4291
+* Forum post on NintendoAge.com: http://nintendoage.com/forum/messageview.cfm?catid=22&threadid=7155
 
 License
 -------
