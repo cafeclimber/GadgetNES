@@ -7,7 +7,7 @@ pub struct Nes {
     cpu: Cpu,
     apu: Apu,
     //ppu: Ppu,
-    pub cart: Cartridge,
+    cart: Cartridge,
 }
 
 impl Nes {
