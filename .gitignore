@@ -8,4 +8,4 @@ Cargo.lock
 
 # Exclude rom files used for testing. These will be listed in documentation
 /roms/
-/dcc6502/
+/nes-disasm/
