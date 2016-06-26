@@ -9,6 +9,9 @@ mod apu;
 mod cart;
 mod instruction;
 
+#[macro_use]
+extern crate enum_primitive;
+extern crate num;
 extern crate byteorder;
 
 fn main() {

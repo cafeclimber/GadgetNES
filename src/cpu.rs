@@ -1,6 +1,7 @@
 use std::fmt;
 use super::apu::Apu;
 use super::cart::Cartridge;
+use num::FromPrimitive;
 use super::instruction::Instruction;
 
 const RAM_SIZE: usize = 2048;
@@ -54,187 +55,209 @@ impl Cpu {
         self.s = 0xfd;
     }
 
-    pub fn read_instr(&self) -> u8 {
-        self.cart.read_rom(self.pc as usize)
+    pub fn read_instr(&self) -> Instruction {
+        let raw_instr = self.cart.read_rom(self.pc as usize);
+        Instruction::from_u8(raw_instr).unwrap_or_else(|| {
+            panic!("Unrecognized instruction: {:?}", raw_instr)
+        })
     }
 
-    pub fn run_instr(&mut self, instr: u8) {
+    pub fn run_instr(&mut self, instr: Instruction) {
+        use super::instruction::Instruction::*;
         match instr {
-            // TODO: Put this in an enum to make printing easier?
             // TODO: Implement unofficial opcodes
-            /*----------Control Operations--------*/
-            0x00 => {/* BRK                      */},
-            0x08 => {/* PHP                      */},
-            0x10 => {/* BPL zero-page +          */},
-            0x18 => {/* CLC                      */},
-            0x20 => {/* JSR absolute             */},
-            0x24 => {/* BIT zero-page            */},
-            0x28 => {/* PLP                      */},
-            0x2c => {/* BIT absolute             */},
-            0x30 => {/* BMI zero-page +          */},
-            0x38 => {/* SEC                      */},
-            0x40 => {/* RTI                      */},
-            0x48 => {/* PHA                      */},
-            0x4c => {/* JMP absolute             */},
-            0x50 => {/* BVC zero-page plus       */},
-            0x58 => {/* CLU                      */},
-            0x60 => {/* RTS                      */},
-            0x68 => {/* PLA                      */},
-            0x6c => {/* JMP indirect             */},
-            0x70 => {/* BVS zero-page +          */},
-            0x78 => {/* SEI                      */},
-            0x84 => {/* STY zero-page            */},
-            0x88 => {/* DEY                      */},
-            0x8c => {/* STY absolute             */},
-            0x90 => {/* BCC zero-page +          */},
-            0x94 => {/* STY z-page indexed (x)   */},
-            0x98 => {/* TYA                      */},
-            0x9c => {/* SHY absolute indexed (x) */},
-            0xa0 => {/* LDY immediate            */},
-            0xa4 => {/* LDY zero-page            */},
-            0xa8 => {/* TAY                      */},
-            0xac => {/* LDY absolute             */},
-            0xb0 => {/* BCS zero-page +          */},
-            0xb4 => {/* LDY z-page indexed (x)   */},
-            0xb8 => {/* CLV                      */},
-            0xbc => {/* LDY absolute indexed (x) */},
-            0xc0 => {/* CPY immediate            */},
-            0xc4 => {/* CPY zero-page            */},
-            0xc8 => {/* INY                      */},
-            0xcc => {/* CPY absolute             */},
-            0xd0 => {/* BNE zero-page +          */},
-            0xd8 => {/* CLD                      */},
-            0xe0 => {/* CPX immediate            */},
-            0xe4 => {/* CPX zero-page            */},
-            0xe8 => {/* INX                      */},
-            0xec => {/* CPX absolute             */},
-            0xf0 => {/* BEQ zero-page +          */},
-            0xf8 => {/* SED                      */},
+            BRK       => {},
 
-            /*------------ALU Operations----------*/
-            0x01 => {/* ORA indexed indirect     */},
-            0x05 => {/* ORA zero-page            */},
-            0x09 => {/* ORA immediate            */},
-            0x0d => {/* ORA absolute             */},
-            0x11 => {/* ORA indirect indexed     */},
-            0x15 => {/* ORA z-page indexed (x)   */},
-            0x19 => {/* ORA absolute indexed (y) */},
-            0x1d => {/* ORA absolute indexed (x) */},
+            // Stack    
+            PHP       => {},
+            PLP       => {},
+            PHA       => {},
+            PLA       => {},
+            TXS       => {},
+            TSX       => {},
+
+            // Branch   
+            BPL       => {},
+            BMI       => {},
+            BVC       => {},
+            BVS       => {},
+            BCC       => {},
+            BCS       => {},
+            BNE       => {},
+            BEQ       => {},
+
+            // Flag instructions
+            CLC       => {},
+            SEC       => {},
+            CLI       => {},
+            SEI       => {},
+            CLV       => {},
+            CLD       => {},
+            SED       => {},
+
+            // Register instructions
+            DEY       => {},
+            DEX       => {},
+            INX       => {},
+            INY       => {},
+            TAX       => {},
+            TXA       => {},
+            TAY       => {},
+            TYA       => {},
+
+            // Compares
+            CPY_imm   => {},
+            CPY_z_pg  => {},
+            CPY_abs   => {},
+            CPX_imm   => {},
+            CPX_z_pg  => {},
+            CPX_abs   => {},
+
+            // Loads
+            LDA_inx_x => {},
+            LDA_z_pg  => {},
+            LDA_imm   => {},
+            LDA_abs   => {},
+            LDA_ind_y => {},
+            LDA_dx    => {},
+            LDA_ax    => {},
+            LDA_ay    => {},
+
+            LDX_imm   => {},
+            LDX_z_pg  => {},
+            LDX_abs   => {},
+            LDX_dy    => {},
+            LDX_ay    => {},
+
+            LDY_imm   => {},
+            LDY_z_pg  => {},
+            LDY_abs   => {},
+            LDY_dx    => {},
+            LDY_ax    => {},
+
+            // Stores
+            STA_inx_x => {},
+            STA_z_pg  => {},
+            STA_abs   => {},
+            STA_ind_y => {},
+            STA_dx    => {},
+            STA_ax    => {},
+            STA_ay    => {},
+
+            STX_z_pg  => {},
+            STX_abs   => {},
+            STX_dy    => {},
+
+            STY_z_pg  => {},
+            STY_abs   => {},
+            STY_dx    => {},
+
+            // Jumps
+            JSR_abs   => {},
+            JMP_abs   => {},
+            JMP_ind   => {},
+
+            RTI       => {},
+            RTS       => {},
+
+            // Bit tests
+            BIT_z_pg  => {},
+            BIT_abs   => {},
+
+            // ALU operations
+            ORA_inx_x => {},
+            ORA_z_pg  => {},
+            ORA_imm   => {},
+            ORA_abs   => {},
+            ORA_ind_y => {},
+            ORA_dx    => {},
+            ORA_ax    => {},
+            ORA_ay    => {},
+
+            AND_inx_x => {},
+            AND_z_pg  => {},
+            AND_imm   => {},
+            AND_abs   => {},
+            AND_ind_y => {},
+            AND_dx    => {},
+            AND_ax    => {},
+            AND_ay    => {},
+
+            EOR_inx_x => {},
+            EOR_z_pg  => {},
+            EOR_imm   => {},
+            EOR_abs   => {},
+            EOR_ind_y => {},
+            EOR_dx    => {},
+            EOR_ax    => {},
+            EOR_ay    => {},
+
+            ADC_inx_x => {},
+            ADC_z_pg  => {},
+            ADC_imm   => {},
+            ADC_abs   => {},
+            ADC_ind_y => {},
+            ADC_dx    => {},
+            ADC_ax    => {},
+            ADC_ay    => {},
+
+            CMP_inx_x => {},
+            CMP_z_pg  => {},
+            CMP_imm   => {},
+            CMP_abs   => {},
+            CMP_ind_y => {},
+            CMP_dx    => {},
+            CMP_ax    => {},
+            CMP_ay    => {},
+
+            SBC_inx_x => {},
+            SBC_z_pg  => {},
+            SBC_imm   => {},
+            SBC_abs   => {},
+            SBC_ind_y => {},
+            SBC_dx    => {},
+            SBC_ax    => {},
+            SBC_ay    => {},
             
-            0x21 => {/* AND indexed indirect     */},
-            0x25 => {/* AND zero-page            */},
-            0x29 => {/* AND immediate            */},
-            0x2d => {/* AND absolute             */},
-            0x31 => {/* AND indirect indexed     */},
-            0x35 => {/* AND z-page indexed (x)   */},
-            0x39 => {/* AND absolute indexed (y) */},
-            0x3d => {/* AND absolute indexed (x) */},
-            
-            0x41 => {/* EOR indexed indirect     */},
-            0x45 => {/* EOR zero-page            */},
-            0x49 => {/* EOR immediate            */},
-            0x4d => {/* EOR absolute             */},
-            0x51 => {/* EOR indirect indexed     */},
-            0x55 => {/* EOR z-page indexed (x)   */},
-            0x59 => {/* EOR absolute indexed (y) */},
-            0x5d => {/* EOR absolute indexed (x) */},
+            ASL_z_pg  => {},
+            ASL       => {},
+            ASL_abs   => {},
+            ASL_dx    => {},
+            ASL_ax    => {},
 
-            0x61 => {/* ADC indexed indirect     */},
-            0x65 => {/* ADC zero-page            */},
-            0x69 => {/* ADC immediate            */},
-            0x6d => {/* ADC absolute             */},
-            0x71 => {/* ADC indirect indexed     */},
-            0x75 => {/* ADC z-page indexed (x)   */},
-            0x79 => {/* ADC absolute indexed (y) */},
-            0x7d => {/* ADC absolute indexed (x) */},
+            LSR_z_pg  => {},
+            LSR       => {},
+            LSR_abs   => {},
+            LSR_dx    => {},
+            LSR_ax    => {},
 
-            0x81 => {/* STA indexed indirect     */},
-            0x85 => {/* STA zero-page            */},
-            0x8d => {/* STA absolute             */},
-            0x91 => {/* STA indirect indexed     */},
-            0x95 => {/* STA z-page indexed (x)   */},
-            0x99 => {/* STA absolute indexed (y) */},
-            0x9d => {/* STA absolute indexed (x) */},
+            // Rotates
+            ROL_z_pg  => {},
+            ROL       => {},
+            ROL_abs   => {},
+            ROL_dx    => {},
+            ROL_ax    => {},
 
-            0xa1 => {/* LDA indexed indirect     */},
-            0xa5 => {/* LDA zero-page            */},
-            0xa9 => {/* LDA immediate            */},
-            0xad => {/* LDA absolute             */},
-            0xb1 => {/* LDA indirect indexed     */},
-            0xb5 => {/* LDA z-page indexed (x)   */},
-            0xb9 => {/* LDA absolute indexed (y) */},
-            0xbd => {/* LDA absolute indexed (x) */},
+            ROR_z_pg  => {},
+            ROR       => {},
+            ROR_abs   => {},
+            ROR_dx    => {},
+            ROR_ax    => {},
 
-            0xc1 => {/* CMP indexed indirect     */},
-            0xc5 => {/* CMP zero-page            */},
-            0xc9 => {/* CMP immediate            */},
-            0xcd => {/* CMP absolute             */},
-            0xd1 => {/* CMP indirect indexed     */},
-            0xd5 => {/* CMP z-page indexed (x)   */},
-            0xd9 => {/* CMP absolute indexed (y) */},
-            0xdd => {/* CMP absolute indexed (x) */},
+            // Increments
+            DEC_z_pg  => {},
+            DEC_abs   => {},
+            DEC_dx    => {},
+            DEC_ax    => {},
 
-            0xe1 => {/* SBC indexed indirect     */},
-            0xe5 => {/* SBC zero-page            */},
-            0xe9 => {/* SBC immediate            */},
-            0xed => {/* SBC absolute             */},
-            0xf1 => {/* SBC indirect indexed     */},
-            0xf5 => {/* SBC z-page indexed (x)   */},
-            0xf9 => {/* SBC absolute indexed (y) */},
-            0xfd => {/* SBC absolute indexed (x) */},
+            INC_z_pg  => {},
+            INC_abs   => {},
+            INC_dx    => {},
+            INC_ax    => {},
 
-            /*----------Read-Modify-Write---------*/
-            0x06 => {/* ASL zero-page            */},
-            0x0a => {/* ASL                      */},
-            0x0e => {/* ASL absolute             */},
-            0x16 => {/* ASL z-page indexed (x)   */},
-            0x1e => {/* ASL absolute indexed (x) */},
-
-            0x26 => {/* ROL zero-page            */},
-            0x2a => {/* ROL                      */},
-            0x2e => {/* ROL absolute             */},
-            0x36 => {/* ROL z-page indexed (x)   */},
-            0x3e => {/* ROL absolute indexed (x) */},
-
-            0x46 => {/* LSR zero-page            */},
-            0x4a => {/* LSR                      */},
-            0x4e => {/* LSR absolute             */},
-            0x56 => {/* LSR z-page indexed (x)   */},
-            0x5e => {/* LSR absolute indexed (x) */},
-
-            0x66 => {/* ROR zero-page            */},
-            0x6a => {/* ROR                      */},
-            0x6e => {/* ROR absolute             */},
-            0x76 => {/* ROR z-page indexed (x)   */},
-            0x7e => {/* ROR absolute indexed (x) */},
-
-            0x86 => {/* STX zero-page            */},
-            0x8a => {/* TXA                      */},
-            0x8e => {/* STX absolute             */},
-            0x96 => {/* STX z-page indexed (y)   */},
-            0x9a => {/* TXS                      */},
-
-            0xa2 => {/* LDX immediate            */},
-            0xa6 => {/* LDX zero-page            */},
-            0xaa => {/* TAX                      */},
-            0xae => {/* LDX absolute             */},
-            0xb6 => {/* LDX z-page indexed (y)   */},
-            0xba => {/* TSX                      */},
-            0xbe => {/* LDX absolute indexed (y) */},
-
-            0xc6 => {/* DEC zero-page            */},
-            0xca => {/* DEX                      */},
-            0xce => {/* DEC absolute             */},
-            0xd6 => {/* DEC z-page indexed (x)   */},
-            0xde => {/* DEC absolute indexed (x) */},
-
-            0xe6 => {/* INC zero-page            */},
-            0xee => {/* INC absolute             */},
-            0xf6 => {/* INC z-page indexed (x)   */},
-            0xfe => {/* INC absolute indexed (x) */},
-
-            0xea => {/* NOP                      */},
-            _    => panic!("Unrecognized instruction: {:#x}", instr),
+            // The ever important nop
+            // Observe all its majesty
+            NOP       => {},
         }
     }
 }

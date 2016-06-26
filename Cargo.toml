@@ -4,4 +4,6 @@ version = "0.1.0"
 authors = ["Ryan Campbell <rdcampbell1990@gmail.com"]
 
 [dependencies]
-byteorder = "0.5"
+byteorder =      "0.5"
+num       =      "0.1.32"
+enum_primitive = "0.1.0"

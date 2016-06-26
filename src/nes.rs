@@ -22,9 +22,9 @@ impl Nes {
         println!("{:#?}\n", self.cpu);
     }
 
-    pub fn run(self) {
+    pub fn run(& mut self) {
         loop {
-            let instr = self.cpu.read_instr(&self.cart);
+            let instr = self.cpu.read_instr();
             self.cpu.run_instr(instr);
         }
     }
