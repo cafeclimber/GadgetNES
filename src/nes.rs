@@ -22,20 +22,10 @@ impl Nes {
         println!("{:#?}\n", self.cpu);
     }
 
-    pub fn run(&mut self) {
+    pub fn run(self) {
         loop {
-            let instr = self.read_instr();
-            self.run_instr(instr);
+            let instr = self.cpu.read_instr(&self.cart);
+            self.cpu.run_instr(instr);
         }
-    }
-
-    fn read_instr(&mut self) -> u8 {
-        let pc = self.cpu.pc;
-        self.cart.read_rom(&pc);
-        0
-    }
-
-    fn run_instr(&mut self, instr: u8) {
-        //self.cpu.run_instr(instr);
     }
 }

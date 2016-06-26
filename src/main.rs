@@ -7,6 +7,7 @@ mod nes;
 mod cpu;
 mod apu;
 mod cart;
+mod instruction;
 
 extern crate byteorder;
 

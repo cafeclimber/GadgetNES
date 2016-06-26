@@ -12,5 +12,7 @@ impl Cartridge {
         self.prg_rom = cart_rom.into_boxed_slice();
     }
 
-    pub fn read_rom(&self, addr: &u16) -> u8 {0}
+    pub fn read_rom(&self, addr: usize) -> u8 {
+        self.prg_rom[addr]
+    }
 }
