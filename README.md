@@ -12,6 +12,12 @@ These are documents or websites I have found particularly useful during this pro
 * Yupferris' awesome Rustendo64 project: https://github.com/yupferris/rustendo64
 * The NESdev Wiki: http://wiki.nesdev.com/w/index.php/Nesdev_Wiki
 * Forum post on NintendoAge.com: http://nintendoage.com/forum/messageview.cfm?catid=22&threadid=7155
+* http://www.emulator101.com/reference/6502-reference.html
+
+Other helpful materials
+-----------------------
+These are other materials I found helpful while writing this emulator:
+* https://github.com/amaiorano/nes-disasm/
 
 License
 -------
