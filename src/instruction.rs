@@ -56,7 +56,7 @@ enum_from_primitive!{
         // TYA       = 0x98,
 
         // Compares
-        // CPY_imm   = 0xc0,
+        CPY_imm   = 0xc0,
         // CPY_z_pg  = 0xc4,
         // CPY_abs   = 0xcc,
         // CPX_imm   = 0xe0,

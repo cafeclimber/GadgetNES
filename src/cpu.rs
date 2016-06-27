@@ -22,12 +22,21 @@ pub struct Cpu {
     ram: Box<[u8]>, // RAM
 
     // Because all instructions are first run by the cpu,
-    // it is easiest to let it own both the APU and the PPU
+    // it is easiest to let it own both the APU, the PPU,
+    // and the cartridge
     apu: Apu,
     // ppu: Ppu,
 
     cart: Cartridge,
 }
+
+const NEGATIVE_FLAG:u8 = 1 << 7;
+const OVERFLOW_FLAG:u8 = 1 << 6;
+const IRQ_FLAG:     u8 = 1 << 4;
+const DECIMAL_FLAG: u8 = 1 << 3;
+const INTERUPT_FLAG:u8 = 1 << 2;
+const ZERO_FLAG:    u8 = 1 << 1;
+const CARRY_FLAG:   u8 = 1 << 0;
 
 impl Cpu {
     pub fn new() -> Cpu{
@@ -50,12 +59,28 @@ impl Cpu {
             cart: Cartridge::default(),
         } 
     }
+
     pub fn power_up(&mut self, cart_rom: Vec<u8>) {
         self.p = 0x34;
         self.s = 0xfd;
 
         self.cart.load_cartridge(cart_rom);
     }
+
+    fn set_flag(&mut self, flag: u8) {
+        self.p = self.p | flag;
+    }
+
+    fn unset_flag(&mut self, flag: u8) {
+        self.p = self.p & !flag;
+    }
+
+    // Stack helpers TODO
+    fn pushs(&mut self, value: u8) {
+        self.ram[(0x100 + self.s as u16) as usize] = value;
+        self.s -= 1;
+    }
+
 
     pub fn read_instr(&self) -> Instruction {
         let raw_instr = self.cart.read_rom(self.pc as usize);
@@ -64,18 +89,17 @@ impl Cpu {
         })
     }
 
-    // TODO implement stack helpers
     // TODO implement memory map instead of raw access?
     pub fn run_instr(&mut self, instr: Instruction) {
         use super::instruction::Instruction::*;
-        println!("INSTR: {:?} CPU STATE: {:?}", instr, self);
+        println!("CPU STATE: {:?}", self);
+        println!("INSTR: {:?}", instr);
         match instr {
             // TODO: Implement unofficial opcodes
             // BRK       => {},
 
             // Stack    
-            PHP       => {self.ram[(0x100 + self.s as u16) as usize] = self.p;
-                          self.pc = self.pc + 4}, // TODO: Stack
+            PHP       => { let status = self.p; self.pushs(status); self.pc += 1 },
             // PLP       => {},
             // PHA       => {},
             // PLA       => {},
@@ -112,7 +136,9 @@ impl Cpu {
             // TYA       => {},
 
             // Compares
-            // CPY_imm   => {},
+            CPY_imm   => { let imm = self.cart.read_rom((self.pc+1) as usize);
+                           let y = self.y; self.compare(y, imm);
+                           self.pc += 2}
             // CPY_z_pg  => {},
             // CPY_abs   => {},
             // CPX_imm   => {},
@@ -191,8 +217,9 @@ impl Cpu {
 
             // EOR_inx_x => {},
             EOR_z_pg  => {let addr = self.cart.read_rom((self.pc+1) as usize);
-                          self.ram[addr as usize];
-                          self.pc = self.pc + 2},
+                          let val = self.ram[addr as usize];
+                          self.eor(val);
+                          self.pc += 2},
             // EOR_imm   => {},
             // EOR_abs   => {},
             // EOR_ind_y => {},
@@ -268,8 +295,19 @@ impl Cpu {
             // NOP       => {},
         }
     }
-}
+    // Functions
+    fn compare(&mut self, reg_val: u8, comp_val: u8) {
+        println!("reg_val: {} comp_val {}", reg_val, comp_val);
+        let comparison = reg_val as i16 - comp_val as i16;
+        if comparison & 0x100 == 0 {self.set_flag(CARRY_FLAG)} else {self.unset_flag(CARRY_FLAG)};
+    }
 
+    fn eor(&mut self, val: u8) {
+        self.a = self.a ^ val;
+        if (self.a as i8) < 0 {self.set_flag(NEGATIVE_FLAG)} else {self.unset_flag(NEGATIVE_FLAG)};
+        if self.a == 0 {self.set_flag(ZERO_FLAG)} else {self.unset_flag(ZERO_FLAG)};
+    }
+}
 
 // TODO: Move this to a propper debugger
 impl fmt::Debug for Cpu {
