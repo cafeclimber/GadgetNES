@@ -15,4 +15,9 @@ impl Cartridge {
     pub fn read_rom(&self, addr: usize) -> u8 {
         self.prg_rom[addr]
     }
+
+    pub fn read_rom_word(&self, addr:usize) -> u16 {
+        (self.prg_rom[addr + 1] as u16) << 8 |
+        (self.prg_rom[addr] as u16)
+    }
 }

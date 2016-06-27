@@ -4,7 +4,7 @@ use super::cart::Cartridge;
 use num::FromPrimitive;
 use super::instruction::Instruction;
 
-const RAM_SIZE: usize = 2048;
+const RAM_SIZE: usize = 0x800;
 
 #[derive(Default)]
 pub struct Cpu {
@@ -37,7 +37,7 @@ impl Cpu {
             x: 0,
             y: 0,
 
-            pc: 0,
+            pc: 0x10, // TODO make this a result of header information
 
             s: 0,
 
@@ -50,217 +50,226 @@ impl Cpu {
             cart: Cartridge::default(),
         } 
     }
-    pub fn power_up(&mut self) {
+    pub fn power_up(&mut self, cart_rom: Vec<u8>) {
         self.p = 0x34;
         self.s = 0xfd;
+
+        self.cart.load_cartridge(cart_rom);
     }
 
     pub fn read_instr(&self) -> Instruction {
         let raw_instr = self.cart.read_rom(self.pc as usize);
         Instruction::from_u8(raw_instr).unwrap_or_else(|| {
-            panic!("Unrecognized instruction: {:?}", raw_instr)
+            panic!("Unrecognized instruction: {:#x}", raw_instr)
         })
     }
 
+    // TODO implement stack helpers
+    // TODO implement memory map instead of raw access?
     pub fn run_instr(&mut self, instr: Instruction) {
         use super::instruction::Instruction::*;
+        println!("INSTR: {:?} CPU STATE: {:?}", instr, self);
         match instr {
             // TODO: Implement unofficial opcodes
-            BRK       => {},
+            // BRK       => {},
 
             // Stack    
-            PHP       => {},
-            PLP       => {},
-            PHA       => {},
-            PLA       => {},
-            TXS       => {},
-            TSX       => {},
+            PHP       => {self.ram[(0x100 + self.s as u16) as usize] = self.p;
+                          self.pc = self.pc + 4}, // TODO: Stack
+            // PLP       => {},
+            // PHA       => {},
+            // PLA       => {},
+            // TXS       => {},
+            // TSX       => {},
 
             // Branch   
-            BPL       => {},
-            BMI       => {},
-            BVC       => {},
-            BVS       => {},
-            BCC       => {},
-            BCS       => {},
-            BNE       => {},
-            BEQ       => {},
+            // BPL       => {},
+            // BMI       => {},
+            // BVC       => {},
+            // BVS       => {},
+            // BCC       => {},
+            // BCS       => {},
+            // BNE       => {},
+            // BEQ       => {},
 
             // Flag instructions
-            CLC       => {},
-            SEC       => {},
-            CLI       => {},
-            SEI       => {},
-            CLV       => {},
-            CLD       => {},
-            SED       => {},
+            // CLC       => {},
+            // SEC       => {},
+            // CLI       => {},
+            // SEI       => {},
+            // CLV       => {},
+            // CLD       => {},
+            // SED       => {},
 
             // Register instructions
-            DEY       => {},
-            DEX       => {},
-            INX       => {},
-            INY       => {},
-            TAX       => {},
-            TXA       => {},
-            TAY       => {},
-            TYA       => {},
+            // DEY       => {},
+            // DEX       => {},
+            // INX       => {},
+            // INY       => {},
+            // TAX       => {},
+            // TXA       => {},
+            // TAY       => {},
+            // TYA       => {},
 
             // Compares
-            CPY_imm   => {},
-            CPY_z_pg  => {},
-            CPY_abs   => {},
-            CPX_imm   => {},
-            CPX_z_pg  => {},
-            CPX_abs   => {},
+            // CPY_imm   => {},
+            // CPY_z_pg  => {},
+            // CPY_abs   => {},
+            // CPX_imm   => {},
+            // CPX_z_pg  => {},
+            // CPX_abs   => {},
 
             // Loads
-            LDA_inx_x => {},
-            LDA_z_pg  => {},
-            LDA_imm   => {},
-            LDA_abs   => {},
-            LDA_ind_y => {},
-            LDA_dx    => {},
-            LDA_ax    => {},
-            LDA_ay    => {},
+            // LDA_inx_x => {},
+            // LDA_z_pg  => {},
+            // LDA_imm   => {},
+            // LDA_abs   => {},
+            // LDA_ind_y => {},
+            // LDA_dx    => {},
+            // LDA_ax    => {},
+            // LDA_ay    => {},
 
-            LDX_imm   => {},
-            LDX_z_pg  => {},
-            LDX_abs   => {},
-            LDX_dy    => {},
-            LDX_ay    => {},
+            // LDX_imm   => {},
+            // LDX_z_pg  => {},
+            // LDX_abs   => {},
+            // LDX_dy    => {},
+            // LDX_ay    => {},
 
-            LDY_imm   => {},
-            LDY_z_pg  => {},
-            LDY_abs   => {},
-            LDY_dx    => {},
-            LDY_ax    => {},
+            // LDY_imm   => {},
+            // LDY_z_pg  => {},
+            // LDY_abs   => {},
+            // LDY_dx    => {},
+            // LDY_ax    => {},
 
             // Stores
-            STA_inx_x => {},
-            STA_z_pg  => {},
-            STA_abs   => {},
-            STA_ind_y => {},
-            STA_dx    => {},
-            STA_ax    => {},
-            STA_ay    => {},
+            // STA_inx_x => {},
+            // STA_z_pg  => {},
+            // STA_abs   => {},
+            // STA_ind_y => {},
+            // STA_dx    => {},
+            // STA_ax    => {},
+            // STA_ay    => {},
 
-            STX_z_pg  => {},
-            STX_abs   => {},
-            STX_dy    => {},
+            // STX_z_pg  => {},
+            // STX_abs   => {},
+            // STX_dy    => {},
 
-            STY_z_pg  => {},
-            STY_abs   => {},
-            STY_dx    => {},
+            // STY_z_pg  => {},
+            // STY_abs   => {},
+            // STY_dx    => {},
 
             // Jumps
-            JSR_abs   => {},
-            JMP_abs   => {},
-            JMP_ind   => {},
+            // JSR_abs   => {},
+            // JMP_abs   => {self.pc = self.cart.read_rom_word((self.pc + 1) as usize)},
+            // JMP_ind   => {},
 
-            RTI       => {},
-            RTS       => {},
+            // RTI       => {},
+            // RTS       => {self.pc = self.pc + 1},
 
             // Bit tests
-            BIT_z_pg  => {},
-            BIT_abs   => {},
+            // BIT_z_pg  => {},
+            // BIT_abs   => {},
 
             // ALU operations
-            ORA_inx_x => {},
-            ORA_z_pg  => {},
-            ORA_imm   => {},
-            ORA_abs   => {},
-            ORA_ind_y => {},
-            ORA_dx    => {},
-            ORA_ax    => {},
-            ORA_ay    => {},
+            // ORA_inx_x => {},
+            // ORA_z_pg  => {},
+            // ORA_imm   => {},
+            // ORA_abs   => {},
+            // ORA_ind_y => {},
+            // ORA_dx    => {},
+            // ORA_ax    => {},
+            // ORA_ay    => {},
 
-            AND_inx_x => {},
-            AND_z_pg  => {},
-            AND_imm   => {},
-            AND_abs   => {},
-            AND_ind_y => {},
-            AND_dx    => {},
-            AND_ax    => {},
-            AND_ay    => {},
+            // AND_inx_x => {},
+            // AND_z_pg  => {},
+            // AND_imm   => {},
+            // AND_abs   => {},
+            // AND_ind_y => {},
+            // AND_dx    => {},
+            // AND_ax    => {},
+            // AND_ay    => {},
 
-            EOR_inx_x => {},
-            EOR_z_pg  => {},
-            EOR_imm   => {},
-            EOR_abs   => {},
-            EOR_ind_y => {},
-            EOR_dx    => {},
-            EOR_ax    => {},
-            EOR_ay    => {},
+            // EOR_inx_x => {},
+            EOR_z_pg  => {let addr = self.cart.read_rom((self.pc+1) as usize);
+                          self.ram[addr as usize];
+                          self.pc = self.pc + 2},
+            // EOR_imm   => {},
+            // EOR_abs   => {},
+            // EOR_ind_y => {},
+            // EOR_dx    => {},
+            // EOR_ax    => {},
+            // EOR_ay    => {},
 
-            ADC_inx_x => {},
-            ADC_z_pg  => {},
-            ADC_imm   => {},
-            ADC_abs   => {},
-            ADC_ind_y => {},
-            ADC_dx    => {},
-            ADC_ax    => {},
-            ADC_ay    => {},
+            // ADC_inx_x => {},
+            // ADC_z_pg  => {},
+            // ADC_imm   => {},
+            // ADC_abs   => {},
+            // ADC_ind_y => {},
+            // ADC_dx    => {},
+            // ADC_ax    => {},
+            // ADC_ay    => {},
 
-            CMP_inx_x => {},
-            CMP_z_pg  => {},
-            CMP_imm   => {},
-            CMP_abs   => {},
-            CMP_ind_y => {},
-            CMP_dx    => {},
-            CMP_ax    => {},
-            CMP_ay    => {},
+            // CMP_inx_x => {},
+            // CMP_z_pg  => {},
+            // CMP_imm   => {},
+            // CMP_abs   => {},
+            // CMP_ind_y => {},
+            // CMP_dx    => {},
+            // CMP_ax    => {},
+            // CMP_ay    => {},
 
-            SBC_inx_x => {},
-            SBC_z_pg  => {},
-            SBC_imm   => {},
-            SBC_abs   => {},
-            SBC_ind_y => {},
-            SBC_dx    => {},
-            SBC_ax    => {},
-            SBC_ay    => {},
+            // SBC_inx_x => {},
+            // SBC_z_pg  => {},
+            // SBC_imm   => {},
+            // SBC_abs   => {},
+            // SBC_ind_y => {},
+            // SBC_dx    => {},
+            // SBC_ax    => {},
+            // SBC_ay    => {},
             
-            ASL_z_pg  => {},
-            ASL       => {},
-            ASL_abs   => {},
-            ASL_dx    => {},
-            ASL_ax    => {},
+            // ASL_z_pg  => {},
+            // ASL       => {},
+            // ASL_abs   => {},
+            // ASL_dx    => {},
+            // ASL_ax    => {},
 
-            LSR_z_pg  => {},
-            LSR       => {},
-            LSR_abs   => {},
-            LSR_dx    => {},
-            LSR_ax    => {},
+            // LSR_z_pg  => {},
+            // LSR       => {},
+            // LSR_abs   => {},
+            // LSR_dx    => {},
+            // LSR_ax    => {},
 
             // Rotates
-            ROL_z_pg  => {},
-            ROL       => {},
-            ROL_abs   => {},
-            ROL_dx    => {},
-            ROL_ax    => {},
+            // ROL_z_pg  => {},
+            // ROL       => {},
+            // ROL_abs   => {},
+            // ROL_dx    => {},
+            // ROL_ax    => {},
 
-            ROR_z_pg  => {},
-            ROR       => {},
-            ROR_abs   => {},
-            ROR_dx    => {},
-            ROR_ax    => {},
+            // ROR_z_pg  => {},
+            // ROR       => {},
+            // ROR_abs   => {},
+            // ROR_dx    => {},
+            // ROR_ax    => {},
 
             // Increments
-            DEC_z_pg  => {},
-            DEC_abs   => {},
-            DEC_dx    => {},
-            DEC_ax    => {},
+            // DEC_z_pg  => {},
+            // DEC_abs   => {},
+            // DEC_dx    => {},
+            // DEC_ax    => {},
 
-            INC_z_pg  => {},
-            INC_abs   => {},
-            INC_dx    => {},
-            INC_ax    => {},
+            // INC_z_pg  => {},
+            // INC_abs   => {},
+            // INC_dx    => {},
+            // INC_ax    => {},
 
             // The ever important nop
             // Observe all its majesty
-            NOP       => {},
+            // NOP       => {},
         }
     }
 }
+
 
 // TODO: Move this to a propper debugger
 impl fmt::Debug for Cpu {

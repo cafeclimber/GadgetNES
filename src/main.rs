@@ -18,6 +18,7 @@ fn main() {
     let rom_name = env::args().nth(1).unwrap();
 
     let cart_rom = read_cartridge(rom_name);
+    // TODO implement header checking
     
     let mut nes = nes::Nes::new();
     nes.power_up(cart_rom);

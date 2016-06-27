@@ -5,5 +5,5 @@ authors = ["Ryan Campbell <rdcampbell1990@gmail.com"]
 
 [dependencies]
 byteorder =      "0.5"
-num       =      "0.1.32"
+num       =      "0.1.30"
 enum_primitive = "0.1.0"
