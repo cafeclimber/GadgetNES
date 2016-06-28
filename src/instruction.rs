@@ -103,8 +103,8 @@ enum_from_primitive!{
         // STY_dx    = 0x94,
 
         // Jumps
-        // JSR_abs   = 0x20,
-        // JMP_abs   = 0x4c,
+        JSR_abs   = 0x20,
+        JMP_abs   = 0x4c,
         // JMP_ind   = 0x6c,
 
         // RTI       = 0x40,

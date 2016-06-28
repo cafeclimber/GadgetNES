@@ -16,6 +16,21 @@ pub struct Apu {
     pub frame_counter: u8, //$4017 also mapped by cpu
 }
 
+impl Apu {
+    pub fn read_reg(&self, addr: u16) -> u8 {
+        match addr {
+            0x4000 ... 0x4003 => {self.pulse_1[(addr - 0x4000) as usize]},
+            0x4004 ... 0x4007 => {self.pulse_2[(addr - 0x4004) as usize]},
+            0x4008 ... 0x400b => {self.triangle[(addr - 0x4008) as usize]},
+            0x400c ... 0x400f => {self.noise[(addr - 0x400c) as usize]},
+            0x4010 ... 0x4013 => {self.dmc[(addr - 0x4010) as usize]},
+            0x4015            => {self.snd_chn},
+            0x4017            => {self.frame_counter},
+            _                 => panic!("Attempted access on nonexistent APU register: {:#x}", addr),
+        }
+    }
+}
+
 impl fmt::Debug for Apu {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "APU: pulse_1: 0x{:x}, 0x{:x}, 0x{:x}, 0x{:x}

@@ -6,6 +6,7 @@ use std::path::Path;
 mod nes;
 mod cpu;
 mod apu;
+mod ppu;
 mod mem;
 mod instruction;
 
