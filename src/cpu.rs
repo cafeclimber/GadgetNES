@@ -111,6 +111,10 @@ impl Cpu {
         self.memory.load_cartridge(cart_rom);
     }
 
+    fn check_flag(&mut self, flag: u8) -> bool{
+        if self.p & flag > 0 {true} else {false}
+    }
+    
     fn set_flag(&mut self, flag: u8) {
         self.p = self.p | flag;
     }
@@ -174,7 +178,7 @@ impl Cpu {
             // BRK       => {},
 
             // Stack    
-            PHP       => { let status = self.p; self.pushs(status); self.pc += 1 },
+            PHP       => {let status = self.p; self.pushs(status); self.pc += 1;},
             // PLP       => {},
             // PHA       => {},
             // PLA       => {},
@@ -182,7 +186,8 @@ impl Cpu {
             // TSX       => {},
 
             // Branch   
-            // BPL       => {},
+            BPL       => {if self.check_flag(NEGATIVE_FLAG) == true {branch(self.relative(pc+1))} // FIXME
+                          else {self.pc += 2;}},
             // BMI       => {},
             // BVC       => {},
             // BVS       => {},
@@ -224,7 +229,7 @@ impl Cpu {
             // LDA_inx_x => {},
             // LDA_z_pg  => {},
             // LDA_imm   => {},
-            LDA_abs   => {self.a = self.read_mem(AM::Absolute(self.pc)); self.pc += 2},
+            LDA_abs   => {self.a = self.read_mem(AM::Absolute(self.pc)); self.pc += 3},
             // LDA_ind_y => {},
             // LDA_dx    => {},
             // LDA_ax    => {},

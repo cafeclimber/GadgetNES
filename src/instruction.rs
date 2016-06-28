@@ -27,7 +27,7 @@ enum_from_primitive!{
         // TSX       = 0xba,
 
         // Branch
-        // BPL       = 0x10,
+        BPL       = 0x10,
         // BMI       = 0x30,
         // BVC       = 0x50,
         // BVS       = 0x70,
