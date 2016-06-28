@@ -35,6 +35,8 @@ const PRG_RAM_SIZE: usize = 0x2000;
 const PRG_ROM_DEFAULT: usize = 0x8000;
 const TODO_CHR_MEM: usize = 0x4000;
 
+use super::apu::Apu;
+
 #[derive(Default)]
 pub struct Memory {
     cpu_ram: Box<[u8]>,
@@ -73,6 +75,7 @@ impl Memory {
     fn map_mem(&self, addr: u16) -> u8 {
         match addr {
             RAM_BEG ... RAM_END => {self.cpu_ram[addr as usize]},
+            APU_REGS_BEG ... APU_REGS_END => 
             // TODO: Deal with mappers and other memory spaces
             CARTRIDGE_SPACE_BEG ... CARTRIDGE_SPACE_END => {self.prg_rom[addr as usize]},
             _ => panic!("Unrecognized virtual address: {:#x}", addr)
