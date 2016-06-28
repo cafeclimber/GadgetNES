@@ -1,8 +1,8 @@
 use std::fmt;
-use super::apu::Apu;
-use super::cart::Cartridge;
 use num::FromPrimitive;
+use super::apu::Apu;
 use super::instruction::Instruction;
+use super::mem::{Memory, AddressingMode};
 
 const RAM_SIZE: usize = 0x800;
 
@@ -19,15 +19,13 @@ pub struct Cpu {
 
     p: u8, // Status register
 
-    ram: Box<[u8]>, // RAM
-
     // Because all instructions are first run by the cpu,
     // it is easiest to let it own both the APU, the PPU,
     // and the cartridge
     apu: Apu,
     // ppu: Ppu,
 
-    cart: Cartridge,
+    memory: Memory,
 }
 
 const NEGATIVE_FLAG:u8 = 1 << 7;
@@ -39,7 +37,7 @@ const ZERO_FLAG:    u8 = 1 << 1;
 const CARRY_FLAG:   u8 = 1 << 0;
 
 impl Cpu {
-    pub fn new() -> Cpu{
+    pub fn new() -> Cpu {
         Cpu {
             a: 0,
 
@@ -52,11 +50,9 @@ impl Cpu {
 
             p: 0,
 
-            ram: vec![0u8; RAM_SIZE].into_boxed_slice(),
-
             apu: Apu::default(),
 
-            cart: Cartridge::default(),
+            memory: Memory::default(),
         } 
     }
 
@@ -64,7 +60,7 @@ impl Cpu {
         self.p = 0x34;
         self.s = 0xfd;
 
-        self.cart.load_cartridge(cart_rom);
+        self.memory.load_cartridge(cart_rom);
     }
 
     fn set_flag(&mut self, flag: u8) {
@@ -77,13 +73,13 @@ impl Cpu {
 
     // Stack helpers TODO
     fn pushs(&mut self, value: u8) {
-        self.ram[(0x100 + self.s as u16) as usize] = value;
+        // TODO self.ram[(0x100 + self.s as u16) as usize] = value;
         self.s -= 1;
     }
 
 
     pub fn read_instr(&self) -> Instruction {
-        let raw_instr = self.cart.read_rom(self.pc as usize);
+        let raw_instr = self.memory.read_instr(self.pc);
         Instruction::from_u8(raw_instr).unwrap_or_else(|| {
             panic!("Unrecognized instruction: {:#x}", raw_instr)
         })
@@ -92,6 +88,7 @@ impl Cpu {
     // TODO implement memory map instead of raw access?
     pub fn run_instr(&mut self, instr: Instruction) {
         use super::instruction::Instruction::*;
+        use mem::AddressingMode as AM;
         println!("CPU STATE: {:?}", self);
         println!("INSTR: {:?}", instr);
         match instr {
@@ -120,9 +117,9 @@ impl Cpu {
             // CLC       => {},
             // SEC       => {},
             // CLI       => {},
-            // SEI       => {},
+            SEI       => {self.set_flag(INTERUPT_FLAG); self.pc += 1},
             // CLV       => {},
-            // CLD       => {},
+            CLD       => {self.unset_flag(DECIMAL_FLAG); self.pc += 1},
             // SED       => {},
 
             // Register instructions
@@ -136,7 +133,7 @@ impl Cpu {
             // TYA       => {},
 
             // Compares
-            CPY_imm   => { let imm = self.cart.read_rom((self.pc+1) as usize);
+            CPY_imm   => { let imm = self.memory.read_mem(AM::Immediate(self.pc));
                            let y = self.y; self.compare(y, imm);
                            self.pc += 2}
             // CPY_z_pg  => {},
@@ -149,7 +146,7 @@ impl Cpu {
             // LDA_inx_x => {},
             // LDA_z_pg  => {},
             // LDA_imm   => {},
-            // LDA_abs   => {},
+            LDA_abs   => {self.a = self.memory.read_mem(AM::Absolute(self.pc)); self.pc += 2},
             // LDA_ind_y => {},
             // LDA_dx    => {},
             // LDA_ax    => {},
@@ -216,8 +213,7 @@ impl Cpu {
             // AND_ay    => {},
 
             // EOR_inx_x => {},
-            EOR_z_pg  => {let addr = self.cart.read_rom((self.pc+1) as usize);
-                          let val = self.ram[addr as usize];
+            EOR_z_pg  => {let val = self.memory.read_mem(AM::ZeroPage(self.pc));
                           self.eor(val);
                           self.pc += 2},
             // EOR_imm   => {},

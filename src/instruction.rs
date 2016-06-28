@@ -40,9 +40,9 @@ enum_from_primitive!{
         // CLC       = 0x18,
         // SEC       = 0x38,
         // CLI       = 0x58,
-        // SEI       = 0x78,
+        SEI       = 0x78,
         // CLV       = 0xb8,
-        // CLD       = 0xd8,
+        CLD       = 0xd8,
         // SED       = 0xf8,
 
         // Register instructions
@@ -67,7 +67,7 @@ enum_from_primitive!{
         // LDA_inx_x = 0xa1,
         // LDA_z_pg  = 0xa5,
         // LDA_imm   = 0xa9,
-        // LDA_abs   = 0xad,
+        LDA_abs   = 0xad,
         // LDA_ind_y = 0xb1,
         // LDA_dx    = 0xb5,
         // LDA_ax    = 0xbd,

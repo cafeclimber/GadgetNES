@@ -6,7 +6,7 @@ use std::path::Path;
 mod nes;
 mod cpu;
 mod apu;
-mod cart;
+mod mem;
 mod instruction;
 
 #[macro_use]

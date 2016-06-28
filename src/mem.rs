@@ -1,4 +1,4 @@
-// ==== Memory Map =====
+/*===== Memory Map ======*/
 const RAM_BEG: u16 = 0x0000;
 const RAM_SIZE: usize = 0x0800;
 const RAM_END: u16 = 0x07ff;
@@ -31,60 +31,81 @@ const CARTRIDGE_SPACE_BEG: u16 = 0x4020;
 const CARTRIDGE_SPACE_SIZE: u16 = 0xBFE0;
 const CARTRIDGE_SPACE_END: u16 = 0xffff;
 
-use cpu::{CpuCore, Apu};
+const PRG_RAM_SIZE: usize = 0x2000;
+const PRG_ROM_DEFAULT: usize = 0x8000;
+const TODO_CHR_MEM: usize = 0x4000;
 
-pub struct Interconnect {
-    ram: Box<[u8]>,
+#[derive(Default)]
+pub struct Memory {
+    cpu_ram: Box<[u8]>,
 
-    ppu: Ppu,
+    prg_ram: Box<[u8]>,
 
-    apu: Apu,
+    prg_rom: Box<[u8]>,
 
-    cart_rom: Box<[u8]>,
+    chr_mem: Box<[u8]>,
 }
 
-impl Interconnect {
-    pub fn new(cart_rom: &Vec<u8>) -> Memory {
-        Memory {
-            ram: vec![0u8; RAM_SIZE].into_boxed_slice(),
+pub enum AddressingMode {
+    Absolute(u16),
+    Immediate(u16),
+    ZeroPage(u16),
+    Relative(u16),
+    AbsX(u16, u8),
+    AbsY(u16, u8),
+    ZPageX(u16, u8),
+    ZPageY(u16, u8),
+    IndexedIndirect(u16, u8),
+    IndirectIndexed(u16, u8),
+}
 
-            // once the size of the cartridge is known, it shouldn't change
-            cart_rom: vec![0u8; cart_rom.len()].into_boxed_slice(),
+impl Memory {
+    // TODO Implement chr_rom, prg_ram, and prg_rom
+    // TODO make this function yield chr_rom and prg_ram as well
+    pub fn load_cartridge(&mut self, cart_rom: Vec<u8>) {
+        self.cpu_ram = vec![0u8; RAM_SIZE].into_boxed_slice();
+        self.prg_ram = vec![0u8; PRG_RAM_SIZE].into_boxed_slice();
+        self.prg_rom = cart_rom.into_boxed_slice();
+        self.chr_mem = vec![0u8; TODO_CHR_MEM].into_boxed_slice();
+    }
+
+
+    fn map_mem(&self, addr: u16) -> u8 {
+        match addr {
+            RAM_BEG ... RAM_END => {self.cpu_ram[addr as usize]},
+            // TODO: Deal with mappers and other memory spaces
+            CARTRIDGE_SPACE_BEG ... CARTRIDGE_SPACE_END => {self.prg_rom[addr as usize]},
+            _ => panic!("Unrecognized virtual address: {:#x}", addr)
         }
     }
 
-    pub fn read_word(address: PhysAddr) -> u8 {
+    pub fn read_instr(&self, addr: u16) -> u8 {
+        self.prg_rom[addr as usize]
+    }
+    // For fetching rest of instructioons
+    fn rom_byte(&self, addr: u16) -> u8 {
+        self.prg_rom[addr as usize]
     }
 
-    pub fn write_word() {}
-}
-
-fn map_addr(virt_addr: u16) -> PhysAddr {
-    match virt_addr {
-        RAM_BEG ... RAM_END =>
-            PhysAddr::ram(virt_addr - RAM_BEG),
-        RAM_MIRROR_ONE_BEG ... RAM_MIRROR_ONE_END =>
-            PhysAddr::ram(virt_addr - RAM_MIRROR_ONE_BEG - 0x0800),
-        RAM_MIRROR_TWO_BEG ... RAM_MIRROR_TWO_END =>
-            PhysAddr::ram(virt_addr - RAM_MIRROR_TWO_BEG - (2 * 0x0800)),
-        RAM_MIRROR_THREE_BEG ... RAM_MIRROR_THREE_END =>
-            PhysAddr::ram(virt_addr - RAM_MIRROR_TWO_BEG - (3 * 0x0800)),
-        PPU_REGS_BEG ... PPU_REGS_END =>
-            PhysAddr::ppu_regs(virt_addr - PPU_MIRRORS_BEG),
-        PPU_MIRRORS_BEG ... PPU_MIRRORS_END =>
-            PhysAddr::ppu_regs((virt_addr - PPU_REGS_BEG) % 8),
-        APU_REGS_BEG ... APU_REGS_END =>
-            PhysAddr::apu_regs(virt_addr - APU_REGS_BEG),
-        _ => panic!("Unrecognized Physical Address {:#x}", virt_addr),
+    fn rom_word(&self, addr: u16) -> u16 {
+        (self.prg_rom[(addr+1) as usize] as u16) << 8 |
+        self.prg_rom[addr as usize] as u16
     }
-}
 
-pub enum PhysAddr {
-    ram(u16),
-
-    ppu_regs(u16),
-
-    apu_regs(u16),
-
-    cartridge_mem(u16),
+    // TODO: Double check these are correct
+    pub fn read_mem(&self, AddressingMode: AddressingMode) -> u8{
+        use self::AddressingMode::*;
+        match AddressingMode {
+            Absolute(pc)      => {self.map_mem(self.rom_word(pc+1))},
+            Immediate(pc)     => {self.rom_byte(pc+1)}
+            ZeroPage(pc)      => {self.map_mem((0x0000 | self.rom_byte(pc+1) as u16))},
+            Relative(pc)      => {self.map_mem((pc + self.rom_byte(pc+1) as u16))},
+            AbsX(pc, cpu_x)   => {self.map_mem((cpu_x as u16 + self.rom_word(pc+1)))},
+            AbsY(pc, cpu_y)   => {self.map_mem((cpu_y as u16 + self.rom_word(pc+1)))},
+            ZPageX(pc, cpu_x) => {self.map_mem(((cpu_x + self.rom_byte(pc+1)) as u16))},
+            ZPageY(pc, cpu_y) => {self.map_mem(((cpu_y as u16) + (self.rom_byte(pc+1)) as u16))},
+            IndexedIndirect(pc, cpu_x) => {self.map_mem((self.rom_word((self.rom_byte(pc+1) + cpu_x) as u16)))},
+            IndirectIndexed(pc, cpu_y) => {self.map_mem((self.rom_word(((self.rom_byte((pc+1) as u16)) + cpu_y) as u16)))},
+        }
+    }
 }
