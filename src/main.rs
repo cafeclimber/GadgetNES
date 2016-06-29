@@ -7,7 +7,9 @@ mod nes;
 mod cpu;
 mod apu;
 mod ppu;
-mod mem;
+mod cart;
+mod mem_map;
+mod interconnect;
 mod instruction;
 
 #[macro_use]
@@ -21,8 +23,8 @@ fn main() {
     let cart_rom = read_cartridge(rom_name);
     // TODO implement header checking
     
-    let mut nes = nes::Nes::new();
-    nes.power_up(cart_rom);
+    let mut nes = nes::Nes::new(cart_rom);
+    nes.power_up();
     nes.run();
 }
 

@@ -19,7 +19,7 @@ enum_from_primitive!{
         // BRK       = 0x00,
 
         // Stack
-        PHP       = 0x08,
+        // PHP       = 0x08,
         // PLP       = 0x28,
         // PHA       = 0x48,
         // PLA       = 0x68,
@@ -27,7 +27,7 @@ enum_from_primitive!{
         // TSX       = 0xba,
 
         // Branch
-        BPL       = 0x10,
+        // BPL       = 0x10,
         // BMI       = 0x30,
         // BVC       = 0x50,
         // BVS       = 0x70,
@@ -40,9 +40,9 @@ enum_from_primitive!{
         // CLC       = 0x18,
         // SEC       = 0x38,
         // CLI       = 0x58,
-        SEI       = 0x78,
+        // SEI       = 0x78,
         // CLV       = 0xb8,
-        CLD       = 0xd8,
+        // CLD       = 0xd8,
         // SED       = 0xf8,
 
         // Register instructions
@@ -56,7 +56,7 @@ enum_from_primitive!{
         // TYA       = 0x98,
 
         // Compares
-        CPY_imm   = 0xc0,
+        // CPY_imm   = 0xc0,
         // CPY_z_pg  = 0xc4,
         // CPY_abs   = 0xcc,
         // CPX_imm   = 0xe0,
@@ -67,7 +67,7 @@ enum_from_primitive!{
         // LDA_inx_x = 0xa1,
         // LDA_z_pg  = 0xa5,
         // LDA_imm   = 0xa9,
-        LDA_abs   = 0xad,
+        // LDA_abs   = 0xad,
         // LDA_ind_y = 0xb1,
         // LDA_dx    = 0xb5,
         // LDA_ax    = 0xbd,
@@ -103,8 +103,8 @@ enum_from_primitive!{
         // STY_dx    = 0x94,
 
         // Jumps
-        JSR_abs   = 0x20,
-        JMP_abs   = 0x4c,
+        // JSR_abs   = 0x20,
+        // JMP_abs   = 0x4c,
         // JMP_ind   = 0x6c,
 
         // RTI       = 0x40,
@@ -134,7 +134,7 @@ enum_from_primitive!{
         // AND_ay    = 0x3d,
 
         // EOR_inx_x = 0x41,
-        EOR_z_pg  = 0x45,
+        // EOR_z_pg  = 0x45,
         // EOR_imm   = 0x49,
         // EOR_abs   = 0x4d,
         // EOR_ind_y = 0x51,
