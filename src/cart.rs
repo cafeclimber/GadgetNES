@@ -12,8 +12,13 @@ impl Cartridge {
         }
     }
 
-    pub fn read_cart(&self, addr: u16) -> u8 {
+    pub fn read_byte(&self, addr: usize) -> u8 {
         println!("Read cart addr: {:#x}", addr);
-        self.prg_rom[addr as usize]
+        self.prg_rom[addr]
+    }
+
+    pub fn read_rom_word(&self, addr:usize) -> u16 {
+        (self.prg_rom[addr + 1] as u16) << 8 |
+        (self.prg_rom[addr] as u16)
     }
 }
