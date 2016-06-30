@@ -1,7 +1,4 @@
 use std::fmt;
-use num::FromPrimitive;
-use super::apu::Apu;
-use super::ppu::Ppu;
 use super::interconnect::Interconnect;
 
 const NEGATIVE_FLAG:u8 = 1 << 7;
@@ -67,6 +64,7 @@ impl Cpu {
 
     pub fn run_instr(&self, interconnect: &mut Interconnect) {
         let instr = interconnect.read_byte(self.pc + 0x8000);
+        println!("instr: {:#x}", instr);
         match instr {
             // TODO: Implement unofficial opcodes
             // 0x00 => {}, // BRK       

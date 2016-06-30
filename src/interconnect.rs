@@ -23,6 +23,7 @@ impl Interconnect {
     pub fn read_byte(&self, virt_addr: u16) -> u8 {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
+        println!("phys_addr: {:?}", phys_addr);
         match phys_addr {
             PhysAddr::CpuRam(addr) => {self.ram[addr as usize]},
             PhysAddr::RamMirrorOne(addr) => {self.ram[(addr - 0x0800) as usize]},
@@ -31,7 +32,7 @@ impl Interconnect {
             PhysAddr::PpuRegs(addr) => {self.ppu.read_reg(addr - 0x2000)},
             PhysAddr::PpuMirrors(addr) => {self.ppu.read_reg((addr - 0x2000) % 8)},
             PhysAddr::ApuRegs(addr) => {self.apu.read_reg(addr - 0x4000)},
-            PhysAddr::CartSpace(addr) => {self.cart.read_cart(addr - 0x4020)},
+            PhysAddr::CartSpace(addr) => {self.cart.read_cart(addr - 0x8000)},
         }
     }
 
