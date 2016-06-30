@@ -1,5 +1,3 @@
-use super::interconnect::Interconnect;
-
 // TODO: extract info
 pub struct Cartridge {
     prg_rom: Box<[u8]>,
@@ -7,13 +5,15 @@ pub struct Cartridge {
 
 impl Cartridge {
     pub fn new(cart_rom: Vec<u8>) -> Cartridge {
-        Cartridge {
-            prg_rom: cart_rom.into_boxed_slice(),
-        }
+        Cartridge { prg_rom: cart_rom.into_boxed_slice() }
     }
 
     // TODO Make a match once I implement the rest of the cartridge
     pub fn read_cart(&self, addr: u16) -> u8 {
         self.prg_rom[addr as usize]
+    }
+
+    pub fn write_byte_to_cart(&mut self, addr: u16, val: u8) {
+        self.prg_rom[addr as usize] = val;
     }
 }

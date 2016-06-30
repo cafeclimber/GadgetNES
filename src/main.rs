@@ -21,7 +21,7 @@ fn main() {
 
     let cart_rom = read_cartridge(rom_name);
     // TODO implement header checking
-    
+
     let mut nes = nes::Nes::new(cart_rom);
     nes.power_up();
     nes.run();

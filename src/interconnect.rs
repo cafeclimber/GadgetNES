@@ -20,10 +20,14 @@ impl Interconnect {
         }
     }
 
+    pub fn power_up(&mut self) {
+        self.ppu.power_up();
+    }
+
+    // PRETTIFYME: Get rid of magic constants
     pub fn read_byte(&self, virt_addr: u16) -> u8 {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
-        println!("phys_addr: {:?}", phys_addr);
         match phys_addr {
             PhysAddr::CpuRam(addr) => {self.ram[addr as usize]},
             PhysAddr::RamMirrorOne(addr) => {self.ram[(addr - 0x0800) as usize]},
@@ -36,6 +40,23 @@ impl Interconnect {
         }
     }
 
+    // PRETTIFYME: Get rid of magic constants
+    pub fn write_byte(&mut self, virt_addr: u16, val: u8) {
+        use super::mem_map::*;
+        let phys_addr = map_virt_addr(virt_addr);
+        match phys_addr {
+            PhysAddr::CpuRam(addr) => {self.ram[addr as usize] = val;},
+            PhysAddr::RamMirrorOne(addr) => {self.ram[(addr - 0x0800) as usize] = val;},
+            PhysAddr::RamMirrorTwo(addr) => {self.ram[(addr - 2 * 0x0800) as usize] = val;},
+            PhysAddr::RamMirrorThree(addr) => {self.ram[(addr - 3 * 0x0800) as usize] = val;},
+            PhysAddr::PpuRegs(addr) => {self.ppu.write_to_reg(addr - 0x2000, val)},
+            PhysAddr::PpuMirrors(addr) => {self.ppu.write_to_reg((addr - 0x2000) % 8, val)},
+            PhysAddr::ApuRegs(addr) => {self.apu.write_to_reg(addr - 0x4000, val)},
+            PhysAddr::CartSpace(addr) => {self.cart.write_byte_to_cart(addr - 0x8000, val);},
+        }
+    }
+
+    // PRETTIFYME: Get rid of magic constants
     pub fn read_word(&self, virt_addr: u16) -> u16 {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
@@ -48,7 +69,7 @@ impl Interconnect {
                                                (self.ram[(addr + 1 - (2 * 0x0800)) as usize] as u16) << 8},
             PhysAddr::RamMirrorThree(addr) => {self.ram[(addr - 3 * 0x0800) as usize] as u16 |
                                                (self.ram[(addr + 1 - (3 * 0x0800)) as usize] as u16) << 8},
-            PhysAddr::CartSpace(addr) => {self.cart.read_cart(addr - 0x4020) as u16 | (self.cart.read_cart(addr + 1 -0x4020) as u16) << 8},
+            PhysAddr::CartSpace(addr) => {self.cart.read_cart(addr - 0x8000) as u16 | (self.cart.read_cart(addr + 1 - 0x8000) as u16) << 8},
             _ => panic!("{:?} does not support reading words", phys_addr),
         }
     }

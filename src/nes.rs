@@ -16,12 +16,14 @@ impl Nes {
 
     pub fn power_up (&mut self) {
         self.cpu.power_up();
+        self.interconnect.power_up();
         println!("{:#?}\n", self.cpu);
     }
 
     pub fn run(&mut self) {
         loop {
             self.cpu.run_instr(&mut self.interconnect);
+            println!("{:#?}\n", self.cpu);
         }
     }
 }

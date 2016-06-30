@@ -23,6 +23,29 @@ pub struct Cpu {
     p: u8, // Status register
 }
 
+// To make branch instruction less tedious
+enum BranchOn {
+    Plus,
+    Minus,
+    OverflowClear,
+    OverflowSet,
+    CarryClear,
+    CarrySet,
+    NotEqual,
+    Equal,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CPURegister {
+    A,
+    X,
+    Y,
+    Pc,
+    S,
+    P,
+}
+
+// TODO Has Registers trait
 impl Cpu {
     pub fn new() -> Cpu {
         Cpu {
@@ -45,7 +68,7 @@ impl Cpu {
     }
 
     fn check_flag(&mut self, flag: u8) -> bool{
-        if self.p & flag > 0 {true} else {false}
+        if self.p & flag != 0 {true} else {false}
     }
     
     fn set_flag(&mut self, flag: u8) {
@@ -62,8 +85,38 @@ impl Cpu {
         self.s -= 1;
     }
 
-    pub fn run_instr(&self, interconnect: &mut Interconnect) {
-        let instr = interconnect.read_byte(self.pc + 0x8000);
+    fn get_pc(&self) -> u16 {
+        self.pc + 0x8000
+    }
+
+    fn increment_pc(&mut self, increment_by: u16) {
+        self.pc += increment_by;
+    }
+
+    fn read_reg(&self, register: CPURegister) -> u8 {
+        match register {
+            CPURegister::A => self.a,
+            CPURegister::X => self.x,
+            CPURegister::Y => self.y,
+            CPURegister::P => self.p,
+            _ => panic!("Attemped to interact with special register: {:?}. Use specific helper methods instead", register),
+        }
+    }
+
+    fn write_to_reg(&mut self, register: CPURegister, val: u8) {
+        match register {
+            CPURegister::A => {self.a = val},
+            CPURegister::X => {self.x = val},
+            CPURegister::Y => {self.y = val},
+            _ => panic!{"Attempt to write to unsupported register: {:?}", register},
+        }
+    }
+
+    // IDEA Make each instruction return tuple of status regs to set? to call after match arm? closure perhaps to form u8?
+    // TODO: Make load function
+    // TODO: Make functions to get operands based on addressing modes
+    pub fn run_instr(&mut self, interconnect: &mut Interconnect) {
+        let instr = interconnect.read_byte(self.get_pc());
         println!("instr: {:#x}", instr);
         match instr {
             // TODO: Implement unofficial opcodes
@@ -78,7 +131,7 @@ impl Cpu {
             // 0xba => {}, // TSX       
 
             // Branch   
-            // 0x10 => {}, // BPL       
+            0x10 => {let branch_target = interconnect.read_byte(self.get_pc() + 1); self.branch(BranchOn::Plus, branch_target);}, // BPL       
             // 0x30 => {}, // BMI       
             // 0x50 => {}, // BVC       
             // 0x70 => {}, // BVS       
@@ -91,14 +144,14 @@ impl Cpu {
             // 0x18 => {}, // CLC      
             // 0x38 => {}, // SEC      
             // 0x58 => {}, // CLI      
-            // 0x78 => {}, // SEI      
+            0x78 => {self.set_flag(INTERUPT_FLAG); self.increment_pc(1)}, // SEI      
             // 0xb8 => {}, // CLV      
-            // 0xd8 => {}, // CLD      
+            0xd8 => {self.unset_flag(DECIMAL_FLAG); self.increment_pc(1)}, // CLD      
             // 0xf8 => {}, // SED      
 
             // Register instructions
             // 0x88 => {}, // DEY       
-            // 0xca => {}, // DEX       
+            0xca => {self.decrement(CPURegister::X); self.increment_pc(1)}, // DEX       
             // 0xe8 => {}, // INX       
             // 0xc8 => {}, // INY       
             // 0xaa => {}, // TAX       
@@ -118,13 +171,13 @@ impl Cpu {
             // 0xa1 => {}, // LDA_inx_x 
             // 0xa5 => {}, // LDA_z_pg  
             // 0xa9 => {}, // LDA_imm   
-            // 0xad => {}, // LDA_abs   
+            0xad => {let val = interconnect.read_byte(interconnect.read_word(self.get_pc() + 1)); self.load(CPURegister::A, val); self.increment_pc(3)}, // LDA_abs   
             // 0xb1 => {}, // LDA_ind_y 
             // 0xb5 => {}, // LDA_dx    
             // 0xbd => {}, // LDA_ax    
             // 0xb9 => {}, // LDA_ay    
 
-            // 0xa2 => {}, // LDX_imm  
+            0xa2 => {let val = interconnect.read_byte(self.get_pc() + 1); self.load(CPURegister::X, val); self.increment_pc(2);}, // LDX_imm  
             // 0xa6 => {}, // LDX_z_pg 
             // 0xae => {}, // LDX_abs  
             // 0xb6 => {}, // LDX_dy   
@@ -146,7 +199,7 @@ impl Cpu {
             // 0x99 => {}, // STA_ay   
 
             // 0x86 => {}, // STX_z_pg 
-            // 0x8e => {}, // STX_abs  
+            0x8e => {let addr = interconnect.read_word(self.get_pc() + 1); interconnect.write_byte(addr, self.x); self.increment_pc(3);}, // STX_abs  
             // 0x96 => {}, // STX_dy   
 
             // 0x84 => {}, // STY_z_pg 
@@ -155,7 +208,7 @@ impl Cpu {
 
             // Jumps
             // 0x20 => {}, // JSR_abs  
-            // 0x4c => {}, // JMP_abs  
+            0x4c => {let target_addr = interconnect.read_word(self.get_pc() + 1); self.jmp(target_addr);}, // JMP_abs  
             // 0x6c => {}, // JMP_ind  
 
             // 0x40 => {}, // RTI      
@@ -271,6 +324,33 @@ impl Cpu {
     }
 
     fn jmp(&mut self, jump_target: u16) {
+        self.pc = jump_target;
+    }
+
+    fn load(&mut self, register: CPURegister, val: u8) {
+        self.write_to_reg(register, val);
+        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG)};
+        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG)};
+    }
+
+    fn branch(&mut self, branch_on: BranchOn, branch_target: u8) {
+        match branch_on {
+            BranchOn::Plus => {if self.check_flag(NEGATIVE_FLAG) {self.increment_pc(2)} else {self.pc = ((self.pc as i32) + (branch_target as i32)) as u16}},
+            BranchOn::Minus => {},
+            BranchOn::OverflowClear => {},
+            BranchOn::OverflowSet => {},
+            BranchOn::CarryClear => {},
+            BranchOn::CarrySet => {},
+            BranchOn::NotEqual => {},
+            BranchOn::Equal => {},
+        }
+    }
+
+    fn decrement(&mut self, register: CPURegister) {
+        let val = self.read_reg(register);
+        val.wrapping_sub(1);
+        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG)};
+        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG)};
     }
 }
 
