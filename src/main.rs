@@ -10,7 +10,6 @@ mod ppu;
 mod cart;
 mod mem_map;
 mod interconnect;
-mod instruction;
 
 #[macro_use]
 extern crate enum_primitive;

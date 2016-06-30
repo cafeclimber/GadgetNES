@@ -20,6 +20,7 @@ const APU_REGS_END: u16 = 0x401f;
 const CART_SPACE_BEG: u16 = 0x4020;
 const CART_SPACE_END: u16 = 0xffff;
 
+#[derive(Debug)]
 pub enum PhysAddr {
     CpuRam(u16),
     RamMirrorOne(u16),

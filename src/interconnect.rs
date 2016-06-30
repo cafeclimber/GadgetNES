@@ -24,14 +24,31 @@ impl Interconnect {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
         match phys_addr {
-            PhysAddr::CpuRam(addr) => {},
-            PhysAddr::RamMirrorOne(addr) => {},
-            PhysAddr::RamMirrorTwo(addr) => {},
-            PhysAddr::RamMirrorThree(addr) => {},
-            PhysAddr::PpuRegs(addr) => {},
-            PhysAddr::PpuMirrors(addr) => {},
-            PhysAddr::ApuRegs(addr) => {},
-            PhysAddr::CartSpace(addr) => {},
+            PhysAddr::CpuRam(addr) => {self.ram[addr as usize]},
+            PhysAddr::RamMirrorOne(addr) => {self.ram[(addr - 0x0800) as usize]},
+            PhysAddr::RamMirrorTwo(addr) => {self.ram[(addr - 2 * 0x0800) as usize]},
+            PhysAddr::RamMirrorThree(addr) => {self.ram[(addr - 3 * 0x0800) as usize]},
+            PhysAddr::PpuRegs(addr) => {self.ppu.read_reg(addr - 0x2000)},
+            PhysAddr::PpuMirrors(addr) => {self.ppu.read_reg((addr - 0x2000) % 8)},
+            PhysAddr::ApuRegs(addr) => {self.apu.read_reg(addr - 0x4000)},
+            PhysAddr::CartSpace(addr) => {self.cart.read_cart(addr - 0x4020)},
+        }
+    }
+
+    pub fn read_word(&self, virt_addr: u16) -> u16 {
+        use super::mem_map::*;
+        let phys_addr = map_virt_addr(virt_addr);
+        match phys_addr {
+            PhysAddr::CpuRam(addr) =>         {self.ram[addr as usize] as u16 |
+                                               (self.ram[(addr + 1) as usize] as u16) << 8},
+            PhysAddr::RamMirrorOne(addr) =>   {self.ram[(addr - 0x0800) as usize] as u16 |
+                                               (self.ram[(addr + 1 -0x0800) as usize] as u16) << 8},
+            PhysAddr::RamMirrorTwo(addr) =>   {self.ram[(addr - 2 * 0x0800) as usize] as u16 |
+                                               (self.ram[(addr + 1 - (2 * 0x0800)) as usize] as u16) << 8},
+            PhysAddr::RamMirrorThree(addr) => {self.ram[(addr - 3 * 0x0800) as usize] as u16 |
+                                               (self.ram[(addr + 1 - (3 * 0x0800)) as usize] as u16) << 8},
+            PhysAddr::CartSpace(addr) => {self.cart.read_cart(addr - 0x4020) as u16 | (self.cart.read_cart(addr + 1 -0x4020) as u16) << 8},
+            _ => panic!("{:?} does not support reading words", phys_addr),
         }
     }
 }
