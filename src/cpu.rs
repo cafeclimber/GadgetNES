@@ -70,198 +70,198 @@ impl Cpu {
         let instr = interconnect.read_byte(self.pc + 0x8000);
         match Instruction::from_u8(instr) {
             // TODO: Implement unofficial opcodes
-            // BRK       => {},
+            // 0x00 => {}, // BRK       
 
             // Stack    
-            // PHP       => {},
-            // PLP       => {},
-            // PHA       => {},
-            // PLA       => {},
-            // TXS       => {},
-            // TSX       => {},
+            // 0x08 => {}, // PHP       
+            // 0x28 => {}, // PLP       
+            // 0x48 => {}, // PHA       
+            // 0x68 => {}, // PLA       
+            // 0x9a => {}, // TXS       
+            // 0xba => {}, // TSX       
 
             // Branch   
-            // BPL       => {},
-            // BMI       => {},
-            // BVC       => {},
-            // BVS       => {},
-            // BCC       => {},
-            // BCS       => {},
-            // BNE       => {},
-            // BEQ       => {},
+            // 0x10 => {}, // BPL       
+            // 0x30 => {}, // BMI       
+            // 0x50 => {}, // BVC       
+            // 0x70 => {}, // BVS       
+            // 0x90 => {}, // BCC       
+            // 0xb0 => {}, // BCS       
+            // 0xd0 => {}, // BNE       
+            // 0xf0 => {}, // BEQ       
 
             // Flag instructions
-            // CLC       => {},
-            // SEC       => {},
-            // CLI       => {},
-            // SEI       => {},
-            // CLV       => {},
-            // CLD       => {},
-            // SED       => {},
+            // 0x18 => {}, // CLC      
+            // 0x38 => {}, // SEC      
+            // 0x58 => {}, // CLI      
+            // 0x78 => {}, // SEI      
+            // 0xb8 => {}, // CLV      
+            // 0xd8 => {}, // CLD      
+            // 0xf8 => {}, // SED      
 
             // Register instructions
-            // DEY       => {},
-            // DEX       => {},
-            // INX       => {},
-            // INY       => {},
-            // TAX       => {},
-            // TXA       => {},
-            // TAY       => {},
-            // TYA       => {},
+            // 0x88 => {}, // DEY       
+            // 0xca => {}, // DEX       
+            // 0xe8 => {}, // INX       
+            // 0xc8 => {}, // INY       
+            // 0xaa => {}, // TAX       
+            // 0x8a => {}, // TXA       
+            // 0xa8 => {}, // TAY       
+            // 0x98 => {}, // TYA       
 
             // Compares
-            // CPY_imm   => {}
-            // CPY_z_pg  => {},
-            // CPY_abs   => {},
-            // CPX_imm   => {},
-            // CPX_z_pg  => {},
-            // CPX_abs   => {},
+            // 0xc0 => {}, // CPY_imm  
+            // 0xc4 => {}, // CPY_z_pg 
+            // 0xcc => {}, // CPY_abs  
+            // 0xe0 => {}, // CPX_imm  
+            // 0xe4 => {}, // CPX_z_pg 
+            // 0xec => {}, // CPX_abs  
 
             // Loads
-            // LDA_inx_x => {},
-            // LDA_z_pg  => {},
-            // LDA_imm   => {},
-            // LDA_abs   => {},
-            // LDA_ind_y => {},
-            // LDA_dx    => {},
-            // LDA_ax    => {},
-            // LDA_ay    => {},
+            // 0xa1 => {}, // LDA_inx_x 
+            // 0xa5 => {}, // LDA_z_pg  
+            // 0xa9 => {}, // LDA_imm   
+            // 0xad => {}, // LDA_abs   
+            // 0xb1 => {}, // LDA_ind_y 
+            // 0xb5 => {}, // LDA_dx    
+            // 0xbd => {}, // LDA_ax    
+            // 0xb9 => {}, // LDA_ay    
 
-            // LDX_imm   => {},
-            // LDX_z_pg  => {},
-            // LDX_abs   => {},
-            // LDX_dy    => {},
-            // LDX_ay    => {},
+            // 0xa2 => {}, // LDX_imm  
+            // 0xa6 => {}, // LDX_z_pg 
+            // 0xae => {}, // LDX_abs  
+            // 0xb6 => {}, // LDX_dy   
+            // 0xbe => {}, // LDX_ay   
 
-            // LDY_imm   => {},
-            // LDY_z_pg  => {},
-            // LDY_abs   => {},
-            // LDY_dx    => {},
-            // LDY_ax    => {},
+            // 0xa0 => {}, // LDY_imm  
+            // 0xa4 => {}, // LDY_z_pg 
+            // 0xac => {}, // LDY_abs  
+            // 0xb4 => {}, // LDY_dx   
+            // 0xbc => {}, // LDY_ax   
 
             // Stores
-            // STA_inx_x => {},
-            // STA_z_pg  => {},
-            // STA_abs   => {},
-            // STA_ind_y => {},
-            // STA_dx    => {},
-            // STA_ax    => {},
-            // STA_ay    => {},
+            // 0x81 => {}, // STA_inx_x
+            // 0x85 => {}, // STA_z_pg 
+            // 0x8d => {}, // STA_abs  
+            // 0x91 => {}, // STA_ind_y
+            // 0x95 => {}, // STA_dx   
+            // 0x9d => {}, // STA_ax   
+            // 0x99 => {}, // STA_ay   
 
-            // STX_z_pg  => {},
-            // STX_abs   => {},
-            // STX_dy    => {},
+            // 0x86 => {}, // STX_z_pg 
+            // 0x8e => {}, // STX_abs  
+            // 0x96 => {}, // STX_dy   
 
-            // STY_z_pg  => {},
-            // STY_abs   => {},
-            // STY_dx    => {},
+            // 0x84 => {}, // STY_z_pg 
+            // 0x8c => {}, // STY_abs  
+            // 0x94 => {}, // STY_dx   
 
             // Jumps
-            // JSR_abs   => {},
-            // JMP_abs   => {},
-            // JMP_ind   => {},
+            // 0x20 => {}, // JSR_abs  
+            // 0x4c => {}, // JMP_abs  
+            // 0x6c => {}, // JMP_ind  
 
-            // RTI       => {},
-            // RTS       => {},
+            // 0x40 => {}, // RTI      
+            // 0x60 => {}, // RTS      
 
             // Bit tests
-            // BIT_z_pg  => {},
-            // BIT_abs   => {},
+            // 0x24 => {}, // BIT_z_pg 
+            // 0x2c => {}, // BIT_abs  
 
             // ALU operations
-            // ORA_inx_x => {},
-            // ORA_z_pg  => {},
-            // ORA_imm   => {},
-            // ORA_abs   => {},
-            // ORA_ind_y => {},
-            // ORA_dx    => {},
-            // ORA_ax    => {},
-            // ORA_ay    => {},
+            // 0x01 => {}, // ORA_inx_x
+            // 0x05 => {}, // ORA_z_pg 
+            // 0x09 => {}, // ORA_imm  
+            // 0x0d => {}, // ORA_abs  
+            // 0x11 => {}, // ORA_ind_y
+            // 0x15 => {}, // ORA_dx   
+            // 0x19 => {}, // ORA_ax   
+            // 0x1d => {}, // ORA_ay   
 
-            // AND_inx_x => {},
-            // AND_z_pg  => {},
-            // AND_imm   => {},
-            // AND_abs   => {},
-            // AND_ind_y => {},
-            // AND_dx    => {},
-            // AND_ax    => {},
-            // AND_ay    => {},
+            // 0x21 => {}, // AND_inx_x
+            // 0x25 => {}, // AND_z_pg 
+            // 0x29 => {}, // AND_imm  
+            // 0x2d => {}, // AND_abs  
+            // 0x31 => {}, // AND_ind_y
+            // 0x35 => {}, // AND_dx   
+            // 0x39 => {}, // AND_ax   
+            // 0x3d => {}, // AND_ay   
 
-            // EOR_inx_x => {},
-            // EOR_z_pg  => {},
-            // EOR_imm   => {},
-            // EOR_abs   => {},
-            // EOR_ind_y => {},
-            // EOR_dx    => {},
-            // EOR_ax    => {},
-            // EOR_ay    => {},
+            // 0x41 => {}, // EOR_inx_x
+            // 0x45 => {}, // EOR_z_pg 
+            // 0x49 => {}, // EOR_imm  
+            // 0x4d => {}, // EOR_abs  
+            // 0x51 => {}, // EOR_ind_y
+            // 0x55 => {}, // EOR_dx   
+            // 0x59 => {}, // EOR_ax   
+            // 0x5d => {}, // EOR_ay   
 
-            // ADC_inx_x => {},
-            // ADC_z_pg  => {},
-            // ADC_imm   => {},
-            // ADC_abs   => {},
-            // ADC_ind_y => {},
-            // ADC_dx    => {},
-            // ADC_ax    => {},
-            // ADC_ay    => {},
+            // 0x61 => {}, // ADC_inx_x
+            // 0x65 => {}, // ADC_z_pg 
+            // 0x69 => {}, // ADC_imm  
+            // 0x6d => {}, // ADC_abs  
+            // 0x71 => {}, // ADC_ind_y
+            // 0x75 => {}, // ADC_dx   
+            // 0x79 => {}, // ADC_ax   
+            // 0x7d => {}, // ADC_ay   
 
-            // CMP_inx_x => {},
-            // CMP_z_pg  => {},
-            // CMP_imm   => {},
-            // CMP_abs   => {},
-            // CMP_ind_y => {},
-            // CMP_dx    => {},
-            // CMP_ax    => {},
-            // CMP_ay    => {},
+            // 0xc1 => {}, // CMP_inx_x
+            // 0xc5 => {}, // CMP_z_pg 
+            // 0xc9 => {}, // CMP_imm  
+            // 0xcd => {}, // CMP_abs  
+            // 0xd1 => {}, // CMP_ind_y
+            // 0xd5 => {}, // CMP_dx   
+            // 0xd9 => {}, // CMP_ax   
+            // 0xdd => {}, // CMP_ay   
 
-            // SBC_inx_x => {},
-            // SBC_z_pg  => {},
-            // SBC_imm   => {},
-            // SBC_abs   => {},
-            // SBC_ind_y => {},
-            // SBC_dx    => {},
-            // SBC_ax    => {},
-            // SBC_ay    => {},
-            
-            // ASL_z_pg  => {},
-            // ASL       => {},
-            // ASL_abs   => {},
-            // ASL_dx    => {},
-            // ASL_ax    => {},
+            // 0xe1 => {}, // SBC_inx_x
+            // 0xe5 => {}, // SBC_z_pg 
+            // 0xe9 => {}, // SBC_imm  
+            // 0xed => {}, // SBC_abs  
+            // 0xf1 => {}, // SBC_ind_y
+            // 0xf5 => {}, // SBC_dx   
+            // 0xf9 => {}, // SBC_ax   
+            // 0xfd => {}, // SBC_ay   
+                 
+            // 0x06 => {}, // ASL_z_pg 
+            // 0x0a => {}, // ASL      
+            // 0x0e => {}, // ASL_abs  
+            // 0x16 => {}, // ASL_dx   
+            // 0x1e => {}, // ASL_ax   
 
-            // LSR_z_pg  => {},
-            // LSR       => {},
-            // LSR_abs   => {},
-            // LSR_dx    => {},
-            // LSR_ax    => {},
+            // 0x46 => {}, // LSR_z_pg 
+            // 0x4a => {}, // LSR      
+            // 0x4e => {}, // LSR_abs  
+            // 0x56 => {}, // LSR_dx   
+            // 0x5e => {}, // LSR_ax   
 
             // Rotates
-            // ROL_z_pg  => {},
-            // ROL       => {},
-            // ROL_abs   => {},
-            // ROL_dx    => {},
-            // ROL_ax    => {},
+            // 0x26 => {}, // ROL_z_pg 
+            // 0x2a => {}, // ROL      
+            // 0x2e => {}, // ROL_abs  
+            // 0x36 => {}, // ROL_dx   
+            // 0x3e => {}, // ROL_ax   
 
-            // ROR_z_pg  => {},
-            // ROR       => {},
-            // ROR_abs   => {},
-            // ROR_dx    => {},
-            // ROR_ax    => {},
+            // 0x66 => {}, // ROR_z_pg 
+            // 0x6a => {}, // ROR      
+            // 0x6e => {}, // ROR_abs  
+            // 0x76 => {}, // ROR_dx   
+            // 0x7e => {}, // ROR_ax   
 
             // Increments
-            // DEC_z_pg  => {},
-            // DEC_abs   => {},
-            // DEC_dx    => {},
-            // DEC_ax    => {},
+            // 0xc6 => {}, // DEC_z_pg 
+            // 0xce => {}, // DEC_abs  
+            // 0xd6 => {}, // DEC_dx   
+            // 0xde => {}, // DEC_ax   
 
-            // INC_z_pg  => {},
-            // INC_abs   => {},
-            // INC_dx    => {},
-            // INC_ax    => {},
+            // 0xe6 => {}, // INC_z_pg 
+            // 0xee => {}, // INC_abs  
+            // 0xf6 => {}, // INC_dx   
+            // 0xfe => {, // INC_ax   
 
             // The ever important nop
             // Observe all its majesty
-            // NOP       => {},
+            // 0xea => {}, // NOP
             _ => panic!("Unrecognized instruction: {:#x}", instr),
         }
     }
