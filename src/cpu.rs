@@ -23,7 +23,6 @@ pub struct Cpu {
     p: u8, // Status register
 }
 
-// To make branch instruction less tedious
 enum BranchOn {
     Plus,
     Minus,
@@ -98,6 +97,7 @@ impl Cpu {
             CPURegister::A => self.a,
             CPURegister::X => self.x,
             CPURegister::Y => self.y,
+            CPURegister::S => self.s,
             CPURegister::P => self.p,
             _ => panic!("Attemped to interact with special register: {:?}. Use specific helper methods instead", register),
         }
@@ -108,6 +108,7 @@ impl Cpu {
             CPURegister::A => {self.a = val},
             CPURegister::X => {self.x = val},
             CPURegister::Y => {self.y = val},
+            CPURegister::S => {self.s = val},
             _ => panic!{"Attempt to write to unsupported register: {:?}", register},
         }
     }
@@ -127,11 +128,12 @@ impl Cpu {
             // 0x28 => {}, // PLP       
             // 0x48 => {}, // PHA       
             // 0x68 => {}, // PLA       
-            // 0x9a => {}, // TXS       
+            0x9a => {self.transfer(CPURegister::X, CPURegister::S); self.increment_pc(1);}, // TXS       
             // 0xba => {}, // TSX       
 
             // Branch   
-            0x10 => {let branch_target = interconnect.read_byte(self.get_pc() + 1); self.branch(BranchOn::Plus, branch_target);}, // BPL       
+            0x10 => {let branch_target = interconnect.read_byte(self.get_pc() + 1);
+                     self.branch(BranchOn::Plus, branch_target);}, // BPL       
             // 0x30 => {}, // BMI       
             // 0x50 => {}, // BVC       
             // 0x70 => {}, // BVS       
@@ -170,20 +172,30 @@ impl Cpu {
             // Loads
             // 0xa1 => {}, // LDA_inx_x 
             // 0xa5 => {}, // LDA_z_pg  
-            // 0xa9 => {}, // LDA_imm   
-            0xad => {let val = interconnect.read_byte(interconnect.read_word(self.get_pc() + 1)); self.load(CPURegister::A, val); self.increment_pc(3)}, // LDA_abs   
+            0xa9 => {let val = self.immediate(interconnect);
+                     self.load(CPURegister::A, val);
+                     self.increment_pc(2);}, // LDA_imm   
+            0xad => {let val = self.absolute(interconnect);
+                     self.load(CPURegister::A, val);
+                     self.increment_pc(3);}, // LDA_abs   
             // 0xb1 => {}, // LDA_ind_y 
             // 0xb5 => {}, // LDA_dx    
             // 0xbd => {}, // LDA_ax    
             // 0xb9 => {}, // LDA_ay    
 
-            0xa2 => {let val = interconnect.read_byte(self.get_pc() + 1); self.load(CPURegister::X, val); self.increment_pc(2);}, // LDX_imm  
-            // 0xa6 => {}, // LDX_z_pg 
+            0xa2 => {let val = self.immediate(interconnect);
+                     self.load(CPURegister::X, val);
+                     self.increment_pc(2);}, // LDX_imm  
+            0xa6 => {let val = self.zero_page(interconnect);
+                     self.load(CPURegister::X, val);
+                     self.increment_pc(2);}, // LDX_z_pg 
             // 0xae => {}, // LDX_abs  
             // 0xb6 => {}, // LDX_dy   
             // 0xbe => {}, // LDX_ay   
 
-            // 0xa0 => {}, // LDY_imm  
+            0xa0 => {let val = self.immediate(interconnect);
+                     self.load(CPURegister::Y, val);
+                     self.increment_pc(2);}, // LDY_imm  
             // 0xa4 => {}, // LDY_z_pg 
             // 0xac => {}, // LDY_abs  
             // 0xb4 => {}, // LDY_dx   
@@ -193,22 +205,28 @@ impl Cpu {
             // 0x81 => {}, // STA_inx_x
             // 0x85 => {}, // STA_z_pg 
             // 0x8d => {}, // STA_abs  
-            // 0x91 => {}, // STA_ind_y
+            //0x91 => {}, // STA_ind_y
             // 0x95 => {}, // STA_dx   
             // 0x9d => {}, // STA_ax   
             // 0x99 => {}, // STA_ay   
 
             // 0x86 => {}, // STX_z_pg 
-            0x8e => {let addr = interconnect.read_word(self.get_pc() + 1); interconnect.write_byte(addr, self.x); self.increment_pc(3);}, // STX_abs  
+            0x8e => {let addr = interconnect.read_word(self.get_pc() + 1);
+                     self.store(interconnect, addr, CPURegister::X);
+                     self.increment_pc(3);}, // STX_abs  
             // 0x96 => {}, // STX_dy   
 
-            // 0x84 => {}, // STY_z_pg 
+            0x84 => {let temp_addr = interconnect.read_byte(self.get_pc() + 1);
+                     let addr = interconnect.read_word(temp_addr as u16);
+                     self.store(interconnect, addr, CPURegister::Y);
+                     self.increment_pc(2);}, // STY_z_pg 
             // 0x8c => {}, // STY_abs  
             // 0x94 => {}, // STY_dx   
 
             // Jumps
             // 0x20 => {}, // JSR_abs  
-            0x4c => {let target_addr = interconnect.read_word(self.get_pc() + 1); self.jmp(target_addr);}, // JMP_abs  
+            0x4c => {let target_addr = interconnect.read_word(self.get_pc() + 1);
+                     self.jmp(target_addr);}, // JMP_abs  
             // 0x6c => {}, // JMP_ind  
 
             // 0x40 => {}, // RTI      
@@ -316,7 +334,46 @@ impl Cpu {
         }
     }
 
-    // Functions
+    // Addressing modes
+    fn immediate(&self, interconnect: &Interconnect) -> u8 {interconnect.read_byte(self.get_pc() + 1)}
+
+    fn absolute(&self, interconnect: &Interconnect) -> u8 {
+        let addr = interconnect.read_word(self.get_pc() + 1);
+        interconnect.read_byte(addr)
+    }
+
+    fn zero_page(&self, interconnect: &Interconnect) -> u8 {
+        let addr = interconnect.read_byte(self.get_pc() + 1);
+        interconnect.read_byte(addr as u16)
+    }
+
+    /// Should only take CPURegister::X or CPURegister::Y as an argument
+    fn absolute_indexed(&self, interconnect: &Interconnect, register: CPURegister) -> u8 {
+        let addr = interconnect.read_word(self.get_pc() + 1);
+        let sum_addr = addr + (self.read_reg(register) as u16);
+        interconnect.read_byte(sum_addr)
+    }
+
+    fn z_page_indexed(&self, interconnect: &Interconnect, register: CPURegister) -> u8 {
+        let addr = interconnect.read_byte(self.get_pc() + 1);
+        let sum_addr = addr + self.read_reg(register);
+        interconnect.read_byte(sum_addr as u16)
+    }
+
+    fn indexed_indirect(&self, interconnect: &Interconnect) -> u8 {
+        let addr = interconnect.read_byte(self.get_pc() + 1);
+        let sum_addr = addr + self.read_reg(CPURegister::X);
+        let addr = interconnect.read_word(sum_addr as u16);
+        interconnect.read_byte(addr as u16)
+    }
+
+    fn indirect_indexed(&self, interconnect: &Interconnect) -> u8 {
+        let mut addr = interconnect.read_word(self.get_pc() + 1);
+        addr += self.read_reg(CPURegister::Y) as u16;
+        interconnect.read_byte(addr)
+    }
+
+    // Instruction abstractions
     fn compare(&mut self, reg_val: u8, comp_val: u8) {
     }
 
@@ -327,10 +384,22 @@ impl Cpu {
         self.pc = jump_target;
     }
 
+    fn transfer(&mut self, from_reg: CPURegister, to_reg: CPURegister) {
+        let val = self.read_reg(from_reg);
+        self.write_to_reg(to_reg, val);
+        if self.read_reg(to_reg) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG)};
+        if self.read_reg(to_reg) == 0 {self.set_flag(ZERO_FLAG)};
+    }
+
     fn load(&mut self, register: CPURegister, val: u8) {
         self.write_to_reg(register, val);
         if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG)};
         if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG)};
+    }
+
+    fn store(&mut self, interconnect: &mut Interconnect, addr: u16, register: CPURegister) {
+        let val = self.read_reg(register);
+        interconnect.write_byte(addr, val);
     }
 
     fn branch(&mut self, branch_on: BranchOn, branch_target: u8) {
