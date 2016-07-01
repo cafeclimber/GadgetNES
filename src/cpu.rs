@@ -82,13 +82,13 @@ impl Cpu {
     }
 
     fn push_byte_stack(&mut self, interconnect: &mut Interconnect, value: u8) {
-        let addr = self.read_reg(CPURegister::S) as u16;
+        let addr = self.read_reg(CPURegister::S) as u16 | 0x100;
         interconnect.write_byte(addr, value);
         self.s -= 1;
     }
 
-    fn push_word_stack(&mut self, interconnect: &mut Interconnect, value: u16) {
-        let addr = self.read_reg(CPURegister::S) as u16;
+    fn push_return_addr(&mut self, interconnect: &mut Interconnect, value: u16) {
+        let addr = self.read_reg(CPURegister::S) as u16 | 0x100;
         interconnect.write_word(addr, value);
         self.s -= 2;
     }
@@ -243,7 +243,7 @@ impl Cpu {
 
             // Jumps
             0x20 => {let ret_addr = self.get_pc() + 2;
-                     self.push_word_stack(interconnect, ret_addr);
+                     self.push_return_addr(interconnect, ret_addr);
                      let addr = interconnect.read_word(self.get_pc() + 1);
                      self.jmp(addr - 0x8000);}, // JSR_abs  
             0x4c => {let target_addr = interconnect.read_word(self.get_pc() + 1);
