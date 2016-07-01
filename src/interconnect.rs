@@ -56,6 +56,22 @@ impl Interconnect {
         }
     }
 
+    pub fn write_word(&mut self, virt_addr: u16, val: u16) {
+        use super::mem_map::*;
+        let phys_addr = map_virt_addr(virt_addr);
+        match phys_addr {
+            PhysAddr::CpuRam(addr) => {self.ram[addr as usize] = (val & 0x00ff) as u8;
+                                       self.ram[(addr + 1) as usize] = (val & 0xff00) as u8;},
+            PhysAddr::RamMirrorOne(addr) => {self.ram[(addr - 0x0800)as usize] = (val & 0x00ff) as u8;
+                                             self.ram[(addr + 1 - 0x0800) as usize] = (val & 0xff00) as u8;},
+            PhysAddr::RamMirrorTwo(addr) => {self.ram[(addr - 2 * 0x0800)as usize] = (val & 0x00ff) as u8;
+                                             self.ram[(addr + 1 - 2 * 0x0800) as usize] = (val & 0xff00) as u8;},
+            PhysAddr::RamMirrorThree(addr) => {self.ram[(addr - 2 * 0x0800)as usize] = (val & 0x00ff) as u8;
+                                             self.ram[(addr + 1 - 2 * 0x0800) as usize] = (val & 0xff00) as u8;},
+            _ => panic!("Attempt to write word to unsupported location: {:?}", phys_addr),
+        }
+    }
+
     // PRETTIFYME: Get rid of magic constants
     pub fn read_word(&self, virt_addr: u16) -> u16 {
         use super::mem_map::*;

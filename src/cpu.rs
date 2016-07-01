@@ -1,13 +1,14 @@
 use std::fmt;
 use super::interconnect::Interconnect;
 
-const NEGATIVE_FLAG:u8 = 1 << 7;
-const OVERFLOW_FLAG:u8 = 1 << 6;
-const IRQ_FLAG:     u8 = 1 << 4;
-const DECIMAL_FLAG: u8 = 1 << 3;
-const INTERUPT_FLAG:u8 = 1 << 2;
-const ZERO_FLAG:    u8 = 1 << 1;
-const CARRY_FLAG:   u8 = 1 << 0;
+const NEGATIVE_FLAG:  u8 = 1 << 7;
+const OVERFLOW_FLAG:  u8 = 1 << 6;
+const STACK_COPY:     u8 = 1 << 5;
+const INSTR_INT_FLAG: u8 = 1 << 4;
+const DECIMAL_FLAG:   u8 = 1 << 3;
+const INTERUPT_FLAG:  u8 = 1 << 2;
+const ZERO_FLAG:      u8 = 1 << 1;
+const CARRY_FLAG:     u8 = 1 << 0;
 
 #[derive(Default)]
 pub struct Cpu {
@@ -66,8 +67,10 @@ impl Cpu {
         self.s = 0xfd;
     }
 
-    fn check_flag(&mut self, flag: u8) -> bool{
-        if self.p & flag != 0 {true} else {false}
+    fn check_flag(&mut self, flag: u8) -> bool {
+        println!("Check flag: {:#b} value: {:#b}", flag, self.read_reg(CPURegister::P));
+        println!("Eval: {:?}", self.read_reg(CPURegister::P) & flag != 0);
+        self.read_reg(CPURegister::P) & flag != 0
     }
     
     fn set_flag(&mut self, flag: u8) {
@@ -78,10 +81,16 @@ impl Cpu {
         self.p = self.p & !flag;
     }
 
-    // Stack helpers TODO
-    fn pushs(&mut self, value: u8) {
-        // TODO self.ram[(0x100 + self.s as u16) as usize] = value;
+    fn push_byte_stack(&mut self, interconnect: &mut Interconnect, value: u8) {
+        let addr = self.read_reg(CPURegister::S) as u16;
+        interconnect.write_byte(addr, value);
         self.s -= 1;
+    }
+
+    fn push_word_stack(&mut self, interconnect: &mut Interconnect, value: u16) {
+        let addr = self.read_reg(CPURegister::S) as u16;
+        interconnect.write_word(addr, value);
+        self.s -= 2;
     }
 
     fn get_pc(&self) -> u16 {
@@ -121,7 +130,11 @@ impl Cpu {
         println!("instr: {:#x}", instr);
         match instr {
             // TODO: Implement unofficial opcodes
-            // 0x00 => {}, // BRK       
+            0x00 => {self.set_flag(STACK_COPY);
+                     self.set_flag(INSTR_INT_FLAG);
+                     let val = self.read_reg(CPURegister::S);
+                     self.push_byte_stack(interconnect, val);
+                     self.increment_pc(2);}, // BRK
 
             // Stack    
             // 0x08 => {}, // PHP       
@@ -139,25 +152,26 @@ impl Cpu {
             // 0x70 => {}, // BVS       
             // 0x90 => {}, // BCC       
             // 0xb0 => {}, // BCS       
-            // 0xd0 => {}, // BNE       
+            0xd0 => {let branch_target = interconnect.read_byte(self.get_pc() + 1);
+                     self.branch(BranchOn::NotEqual, branch_target);}, // BNE       
             // 0xf0 => {}, // BEQ       
 
             // Flag instructions
             // 0x18 => {}, // CLC      
             // 0x38 => {}, // SEC      
             // 0x58 => {}, // CLI      
-            0x78 => {self.set_flag(INTERUPT_FLAG); self.increment_pc(1)}, // SEI      
+            0x78 => {self.set_flag(INTERUPT_FLAG); self.increment_pc(1);}, // SEI      
             // 0xb8 => {}, // CLV      
-            0xd8 => {self.unset_flag(DECIMAL_FLAG); self.increment_pc(1)}, // CLD      
+            0xd8 => {self.unset_flag(DECIMAL_FLAG); self.increment_pc(1);}, // CLD      
             // 0xf8 => {}, // SED      
 
             // Register instructions
-            // 0x88 => {}, // DEY       
-            0xca => {self.decrement(CPURegister::X); self.increment_pc(1)}, // DEX       
+            0x88 => {self.decrement(CPURegister::Y); self.increment_pc(1);}, // DEY       
+            0xca => {self.decrement(CPURegister::X); self.increment_pc(1);}, // DEX       
             // 0xe8 => {}, // INX       
             // 0xc8 => {}, // INY       
             // 0xaa => {}, // TAX       
-            // 0x8a => {}, // TXA       
+            0x8a => {self.transfer(CPURegister::X, CPURegister::A); self.increment_pc(1);}, // TXA       
             // 0xa8 => {}, // TAY       
             // 0x98 => {}, // TYA       
 
@@ -205,7 +219,11 @@ impl Cpu {
             // 0x81 => {}, // STA_inx_x
             // 0x85 => {}, // STA_z_pg 
             // 0x8d => {}, // STA_abs  
-            //0x91 => {}, // STA_ind_y
+            0x91 => {let addr = interconnect.read_byte(self.get_pc() + 1);
+                     let sum_addr = addr + self.read_reg(CPURegister::X);
+                     let addr = interconnect.read_word(sum_addr as u16);
+                     self.store(interconnect, addr, CPURegister::A);
+                     self.increment_pc(2);}, // STA_ind_y
             // 0x95 => {}, // STA_dx   
             // 0x9d => {}, // STA_ax   
             // 0x99 => {}, // STA_ay   
@@ -224,9 +242,12 @@ impl Cpu {
             // 0x94 => {}, // STY_dx   
 
             // Jumps
-            // 0x20 => {}, // JSR_abs  
+            0x20 => {let ret_addr = self.get_pc() + 2;
+                     self.push_word_stack(interconnect, ret_addr);
+                     let addr = interconnect.read_word(self.get_pc() + 1);
+                     self.jmp(addr - 0x8000);}, // JSR_abs  
             0x4c => {let target_addr = interconnect.read_word(self.get_pc() + 1);
-                     self.jmp(target_addr);}, // JMP_abs  
+                     self.jmp(target_addr - 0x8000);}, // JMP_abs  
             // 0x6c => {}, // JMP_ind  
 
             // 0x40 => {}, // RTI      
@@ -317,7 +338,11 @@ impl Cpu {
             // 0x7e => {}, // ROR_ax   
 
             // Increments
-            // 0xc6 => {}, // DEC_z_pg 
+            0xc6 => {let addr = interconnect.read_byte(self.get_pc() + 1);
+                     let val = interconnect.read_byte(addr as u16);
+                     val.wrapping_sub(1);
+                     interconnect.write_byte(addr as u16, val);
+                     self.increment_pc(2);}, // DEC_z_pg 
             // 0xce => {}, // DEC_abs  
             // 0xd6 => {}, // DEC_dx   
             // 0xde => {}, // DEC_ax   
@@ -387,14 +412,14 @@ impl Cpu {
     fn transfer(&mut self, from_reg: CPURegister, to_reg: CPURegister) {
         let val = self.read_reg(from_reg);
         self.write_to_reg(to_reg, val);
-        if self.read_reg(to_reg) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG)};
-        if self.read_reg(to_reg) == 0 {self.set_flag(ZERO_FLAG)};
+        if self.read_reg(to_reg) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if self.read_reg(to_reg) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
     }
 
     fn load(&mut self, register: CPURegister, val: u8) {
         self.write_to_reg(register, val);
-        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG)};
-        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG)};
+        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
     }
 
     fn store(&mut self, interconnect: &mut Interconnect, addr: u16, register: CPURegister) {
@@ -410,16 +435,16 @@ impl Cpu {
             BranchOn::OverflowSet => {},
             BranchOn::CarryClear => {},
             BranchOn::CarrySet => {},
-            BranchOn::NotEqual => {},
+            BranchOn::NotEqual => {if self.check_flag(ZERO_FLAG) {self.pc = ((self.pc as i32) + (branch_target as i32)) as u16} else {self.increment_pc(2)}},
             BranchOn::Equal => {},
         }
     }
 
     fn decrement(&mut self, register: CPURegister) {
         let val = self.read_reg(register);
-        val.wrapping_sub(1);
-        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG)};
-        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG)};
+        self.write_to_reg(register, val.wrapping_sub(1));
+        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
     }
 }
 
