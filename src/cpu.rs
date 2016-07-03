@@ -1,14 +1,19 @@
 use std::fmt;
+use super::mapper::*;
 use super::interconnect::Interconnect;
 
 const NEGATIVE_FLAG:  u8 = 1 << 7;
 const OVERFLOW_FLAG:  u8 = 1 << 6;
 const STACK_COPY:     u8 = 1 << 5;
-const INSTR_INT_FLAG: u8 = 1 << 4;
+const BRK_FLAG: u8 = 1 << 4;
 const DECIMAL_FLAG:   u8 = 1 << 3;
-const INTERUPT_FLAG:  u8 = 1 << 2;
+const IRQ_FLAG:  u8 = 1 << 2;
 const ZERO_FLAG:      u8 = 1 << 1;
 const CARRY_FLAG:     u8 = 1 << 0;
+
+const NMI_VECTOR: u16 = 0xfffa;
+const RESET_VECTOR: u16 = 0xfffc;
+const IRQBRK_VECTOR: u16 = 0xfffe;
 
 #[derive(Default)]
 pub struct Cpu {
@@ -19,9 +24,9 @@ pub struct Cpu {
 
     pc: u16, // Program counter
     
-    s: u8, // Stack pointer
+    stack_pointer: u8, // Stack pointer
 
-    p: u8, // Status register
+    status: u8, // Status register
 }
 
 enum BranchOn {
@@ -41,8 +46,8 @@ enum CPURegister {
     X,
     Y,
     Pc,
-    S,
-    P,
+    StackPointer,
+    Status,
 }
 
 // TODO Has Registers trait
@@ -56,41 +61,41 @@ impl Cpu {
 
             pc: 0x10, // TODO make this a result of header information
 
-            s: 0,
+            stack_pointer: 0,
 
-            p: 0,
+            status: 0,
         } 
     }
 
     pub fn power_up(&mut self) {
-        self.p = 0x34;
-        self.s = 0xfd;
+        self.status = 0x34;
+        self.stack_pointer = 0xfd;
     }
 
     fn check_flag(&mut self, flag: u8) -> bool {
-        println!("Check flag: {:#b} value: {:#b}", flag, self.read_reg(CPURegister::P));
-        println!("Eval: {:?}", self.read_reg(CPURegister::P) & flag != 0);
-        self.read_reg(CPURegister::P) & flag != 0
+        println!("Check flag: {:#b} value: {:#b}", flag, self.read_reg(CPURegister::Status));
+        println!("Eval: {:?}", self.read_reg(CPURegister::Status) & flag != 0);
+        self.read_reg(CPURegister::Status) & flag != 0
     }
     
     fn set_flag(&mut self, flag: u8) {
-        self.p = self.p | flag;
+        self.status = self.status | flag;
     }
 
     fn unset_flag(&mut self, flag: u8) {
-        self.p = self.p & !flag;
+        self.status = self.status & !flag;
     }
 
     fn push_byte_stack(&mut self, interconnect: &mut Interconnect, value: u8) {
-        let addr = self.read_reg(CPURegister::S) as u16 | 0x100;
+        let addr = self.read_reg(CPURegister::StackPointer) as u16 | 0x100;
         interconnect.write_byte(addr, value);
-        self.s -= 1;
+        self.stack_pointer -= 1;
     }
 
     fn push_return_addr(&mut self, interconnect: &mut Interconnect, value: u16) {
-        let addr = self.read_reg(CPURegister::S) as u16 | 0x100;
+        let addr = self.read_reg(CPURegister::StackPointer) as u16 | 0x100;
         interconnect.write_word(addr, value);
-        self.s -= 2;
+        self.stack_pointer -= 2;
     }
 
     fn get_pc(&self) -> u16 {
@@ -106,8 +111,8 @@ impl Cpu {
             CPURegister::A => self.a,
             CPURegister::X => self.x,
             CPURegister::Y => self.y,
-            CPURegister::S => self.s,
-            CPURegister::P => self.p,
+            CPURegister::StackPointer => self.stack_pointer,
+            CPURegister::Status => self.status,
             _ => panic!("Attemped to interact with special register: {:?}. Use specific helper methods instead", register),
         }
     }
@@ -117,7 +122,7 @@ impl Cpu {
             CPURegister::A => {self.a = val},
             CPURegister::X => {self.x = val},
             CPURegister::Y => {self.y = val},
-            CPURegister::S => {self.s = val},
+            CPURegister::StackPointer => {self.stack_pointer = val},
             _ => panic!{"Attempt to write to unsupported register: {:?}", register},
         }
     }
@@ -130,18 +135,22 @@ impl Cpu {
         println!("instr: {:#x}", instr);
         match instr {
             // TODO: Implement unofficial opcodes
-            0x00 => {self.set_flag(STACK_COPY);
-                     self.set_flag(INSTR_INT_FLAG);
-                     let val = self.read_reg(CPURegister::S);
-                     self.push_byte_stack(interconnect, val);
-                     self.increment_pc(2);}, // BRK
+
+            // FIXME: ...wat
+            0x00 => {let ret_addr = self.get_pc();
+                     self.push_return_addr(interconnect, ret_addr);
+                     let flags = self.read_reg(CPURegister::StackPointer);
+                     self.push_byte_stack(interconnect, flags);
+                     self.set_flag(IRQ_FLAG);
+                     let jmp_addr = interconnect.read_word(IRQBRK_VECTOR);
+                     self.jmp(jmp_addr);}, // BRK
 
             // Stack    
             // 0x08 => {}, // PHP       
             // 0x28 => {}, // PLP       
             // 0x48 => {}, // PHA       
             // 0x68 => {}, // PLA       
-            0x9a => {self.transfer(CPURegister::X, CPURegister::S); self.increment_pc(1);}, // TXS       
+            0x9a => {self.transfer(CPURegister::X, CPURegister::StackPointer); self.increment_pc(1);}, // TXS       
             // 0xba => {}, // TSX       
 
             // Branch   
@@ -157,10 +166,10 @@ impl Cpu {
             // 0xf0 => {}, // BEQ       
 
             // Flag instructions
-            // 0x18 => {}, // CLC      
+            0x18 => {self.unset_flag(CARRY_FLAG); self.increment_pc(1);}, // CLC      
             // 0x38 => {}, // SEC      
             // 0x58 => {}, // CLI      
-            0x78 => {self.set_flag(INTERUPT_FLAG); self.increment_pc(1);}, // SEI      
+            0x78 => {self.set_flag(IRQ_FLAG); self.increment_pc(1);}, // SEI      
             // 0xb8 => {}, // CLV      
             0xd8 => {self.unset_flag(DECIMAL_FLAG); self.increment_pc(1);}, // CLD      
             // 0xf8 => {}, // SED      
@@ -451,8 +460,8 @@ impl Cpu {
 // TODO: Move this to a propper debugger
 impl fmt::Debug for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "CPU: a:0x{:x} x:0x{:x} y:0x{:x} pc:0x{:x} s:0x{:x} p:0x{:x}",
-               self.a, self.x, self.y, self.pc, self.s, self.p)
+        write!(f, "CPU: a:0x{:x} x:0x{:x} y:0x{:x} pc:0x{:x} stack_pointer:0x{:x} status:0b{:#b}",
+               self.a, self.x, self.y, self.pc, self.stack_pointer, self.status)
     }
 }
 

@@ -1,4 +1,5 @@
 use cpu::Cpu;
+use mapper::*;
 use interconnect::Interconnect;
 
 pub struct Nes {
@@ -7,16 +8,16 @@ pub struct Nes {
 }
 
 impl Nes {
-    pub fn new(cart_rom: Vec<u8>) -> Nes {
+    pub fn new(cart_rom: &Vec<u8>) -> Nes {
         Nes {
             cpu: Cpu::new(),
-            interconnect: Interconnect::new(cart_rom),
+            interconnect: Interconnect::new(&cart_rom),
         }
     }
 
-    pub fn power_up (&mut self) {
+    pub fn power_up (&mut self, cart_rom: Vec<u8>) {
         self.cpu.power_up();
-        self.interconnect.power_up();
+        self.interconnect.power_up(cart_rom);
         println!("{:#?}\n", self.cpu);
     }
 

@@ -1,5 +1,6 @@
 use super::apu::Apu;
 use super::ppu::Ppu;
+use super::mapper::*;
 use super::cart::Cartridge;
 
 pub struct Interconnect {
@@ -11,7 +12,7 @@ pub struct Interconnect {
 
 impl Interconnect {
     // TODO Implement chr_rom, prg_ram, and prg_rom
-    pub fn new(cart_rom: Vec<u8>) -> Interconnect {
+    pub fn new(cart_rom: &Vec<u8>) -> Interconnect {
         Interconnect {
             ram: vec![0; 0x0800].into_boxed_slice(),
             apu: Apu::default(),
@@ -20,7 +21,8 @@ impl Interconnect {
         }
     }
 
-    pub fn power_up(&mut self) {
+    pub fn power_up(&mut self, cart_rom: Vec<u8>) {
+        self.cart.mapper.load_rom(cart_rom);
         self.ppu.power_up();
     }
 
