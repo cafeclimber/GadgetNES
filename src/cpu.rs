@@ -2,12 +2,13 @@ use std::fmt;
 use super::interconnect::Interconnect;
 use super::instructions::Instruction;
 
+// PRETTIFYME: Make an enum?
 const NEGATIVE_FLAG:  u8 = 1 << 7;
 const OVERFLOW_FLAG:  u8 = 1 << 6;
 const STACK_COPY:     u8 = 1 << 5;
-const BRK_FLAG: u8 = 1 << 4;
+const BRK_FLAG:       u8 = 1 << 4;
 const DECIMAL_FLAG:   u8 = 1 << 3;
-const IRQ_FLAG:  u8 = 1 << 2;
+const IRQ_FLAG:       u8 = 1 << 2;
 const ZERO_FLAG:      u8 = 1 << 1;
 const CARRY_FLAG:     u8 = 1 << 0;
 
@@ -29,7 +30,7 @@ pub struct Cpu {
     status: u8, // Status register
 }
 
-#[derive(Debug)]
+/*#[derive(Debug)]
 enum AddressingMode {
     Accumulator,
     Implied,
@@ -41,7 +42,7 @@ enum AddressingMode {
     ZeroPageIndexed(CPURegister),
     IndexedIndirect,
     IndirectIndexed,
-}
+}*/
 
 #[derive(Debug)]
 enum BranchOn {
@@ -105,16 +106,23 @@ impl Cpu {
         self.stack_pointer -= 1;
     }
 
+    fn pull_byte_stack(&mut self, interconnect: &Interconnect, register: CPURegister) {
+        self.stack_pointer += 1;
+        let addr = self.read_reg(CPURegister::StackPointer) as u16 | 0x100;
+        self.write_to_reg(register, interconnect.read_byte(addr));
+        self.set_flag(STACK_COPY);
+    }
+
     fn push_return_addr(&mut self, interconnect: &mut Interconnect) {
         let addr = (self.read_reg(CPURegister::StackPointer) as u16) | 0x100;
         interconnect.write_word(addr, self.pc + 2);
         self.stack_pointer -= 2;
     }
 
-    fn pop_return_addr(&mut self, interconnect: &mut Interconnect) -> u16 {
+    fn pull_return_addr(&mut self, interconnect: &mut Interconnect) -> u16 {
         self.stack_pointer += 2;
         let addr = self.read_reg(CPURegister::StackPointer) as u16 | 0x100;
-        let ret_addr = interconnect.read_word(addr) ;
+        let ret_addr = interconnect.read_word(addr) + 1;
         ret_addr
     }
 
@@ -143,6 +151,7 @@ impl Cpu {
             CPURegister::X => {self.x = val},
             CPURegister::Y => {self.y = val},
             CPURegister::StackPointer => {self.stack_pointer = val},
+            CPURegister::Status => {self.status = val},
             _ => panic!{"Attempt to write to unsupported register: {:?}", register},
         }
     }
@@ -172,16 +181,19 @@ impl Cpu {
                      self.jmp(jmp_addr);}, // BRK*/
 
             // Stack    
-            // PHP => {},
-            // PLP => {},
-            // PHA => {},
-            // PLA => {},
+            PHP => {let val = self.read_reg(CPURegister::Status); self.push_byte_stack(interconnect, val); self.set_flag(BRK_FLAG); self.increment_pc(1);},
+            PLP => {self.pull_byte_stack(interconnect, CPURegister::Status); self.increment_pc(1);},
+            PHA => {let val = self.read_reg(CPURegister::A); self.push_byte_stack(interconnect, val); self.increment_pc(1);},
+            PLA => {self.pull_byte_stack(interconnect, CPURegister::A);
+                    self.increment_pc(1);
+                    if self.read_reg(CPURegister::A) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+                    if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};},
             TXS => {self.transfer(CPURegister::X, CPURegister::StackPointer); self.increment_pc(1);},
             // TSX => {},
 
             // Branch   
             BPL => {self.branch(interconnect, BranchOn::Plus);},
-            // BMI => {},
+            BMI => {self.branch(interconnect, BranchOn::Minus)},
             BVC => {self.branch(interconnect, BranchOn::OverflowClear);},
             BVS => {self.branch(interconnect, BranchOn::OverflowSet);},
             BCC => {self.branch(interconnect, BranchOn::CarryClear);},
@@ -194,25 +206,25 @@ impl Cpu {
             SEC => {self.set_flag(CARRY_FLAG); self.increment_pc(1);},
             // CLI => {},
             SEI => {self.set_flag(IRQ_FLAG); self.increment_pc(1);},
-            // CLV => {},
+            CLV => {self.unset_flag(OVERFLOW_FLAG); self.increment_pc(1)},
             CLD => {self.unset_flag(DECIMAL_FLAG); self.increment_pc(1);},
-            // SED => {},
+            SED => {self.set_flag(DECIMAL_FLAG); self.increment_pc(1);},
 
             // Register instructions
             DEY => {self.decrement(CPURegister::Y); self.increment_pc(1);},
             DEX => {self.decrement(CPURegister::X); self.increment_pc(1);},
-            // INX => {},
-            // INY => {},
+            INX => {self.increment(CPURegister::X); self.increment_pc(1);},
+            INY => {self.increment(CPURegister::Y); self.increment_pc(1);},
             TAX => {self.transfer(CPURegister::A, CPURegister::X); self.increment_pc(1);},
             TXA => {self.transfer(CPURegister::X, CPURegister::A); self.increment_pc(1);},
             // TAY => {},
             // TYA => {},
 
             // Compares
-            // CPY_imm => {}, 
+            CPYImm => {let val = self.immediate(interconnect); self.compare(CPURegister::Y, val); self.increment_pc(2);}, 
             // CPY_z_pg=> {}, 
             // CPY_abs => {}, 
-            // CPX_imm => {}, 
+            CPXImm => {let val = self.immediate(interconnect); self.compare(CPURegister::X, val); self.increment_pc(2);}, 
             // CPX_z_pg=> {}, 
             // CPX_abs => {}, 
 
@@ -292,7 +304,7 @@ impl Cpu {
             // JMP_ind => {}, 
 
             // RTI     => {}, 
-            RTS => {let ret_addr = self.pop_return_addr(interconnect); self.jmp(ret_addr);},
+            RTS => {let ret_addr = self.pull_return_addr(interconnect); self.jmp(ret_addr);},
 
             // Bit tests
             BITZpg => {let val = self.zero_page(interconnect); self.bit(val); self.increment_pc(2);},
@@ -319,7 +331,7 @@ impl Cpu {
 
             // EOR_inx_=> {}, 
             // EOR_z_pg=> {}, 
-            // EOR_imm => {}, 
+            EORImm => {let val = self.immediate(interconnect); self.eor(val); self.increment_pc(2);}, 
             // EOR_abs => {}, 
             // EOR_ind_=> {}, 
             // EOR_dx  => {}, 
@@ -337,7 +349,7 @@ impl Cpu {
 
             // CMP_inx_=> {}, 
             // CMP_z_pg=> {}, 
-            // CMP_imm => {}, 
+            CMPImm => {let val = self.immediate(interconnect); self.compare(CPURegister::A, val); self.increment_pc(2);}, 
             // CMP_abs => {}, 
             // CMP_ind_=> {}, 
             // CMP_dx  => {}, 
@@ -346,7 +358,7 @@ impl Cpu {
 
             // SBC_inx_=> {}, 
             // SBC_z_pg=> {}, 
-            // SBC_imm => {}, 
+            SBCImm => {let val = self.immediate(interconnect); self.sub(val); self.increment_pc(2);}, 
             // SBC_abs => {}, 
             // SBC_ind_=> {}, 
             // SBC_dx  => {}, 
@@ -439,23 +451,95 @@ impl Cpu {
     }
 
     // Instruction abstractions
+    // PRETTIFYME: This is a kludge
+    fn add(&mut self, val: u8) {
+        let a = self.read_reg(CPURegister::A) as u16;
+        let mut sum = a + val as u16;
+        if self.check_flag(CARRY_FLAG) {sum += 1;};
+        if sum > 255 {self.set_flag(CARRY_FLAG)} else {self.unset_flag(CARRY_FLAG);}
+        if !((a as u8) ^ val) & ((a as u8) ^ sum as u8) & 0x80 != 0 {self.set_flag(OVERFLOW_FLAG)} else {self.unset_flag(OVERFLOW_FLAG)}
+        if (sum & 0xff) as u8 & (1 << 7) != 0 {self.set_flag(NEGATIVE_FLAG)} else {self.unset_flag(NEGATIVE_FLAG);}
+        if ((sum & 0xff) as u8) == 0 {self.set_flag(ZERO_FLAG)} else {self.unset_flag(ZERO_FLAG);}
+        self.write_to_reg(CPURegister::A, sum as u8);
+    }
+
+    fn and(&mut self, val: u8) {
+        let a = self.read_reg(CPURegister::A);
+        self.write_to_reg(CPURegister::A, a & val);
+        if self.read_reg(CPURegister::A) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+    }
+
     fn bit(&mut self, val: u8) {
         if val & self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);}
         if val & (1 << 6) != 0 {self.set_flag(OVERFLOW_FLAG)} else {self.unset_flag(OVERFLOW_FLAG);}
         if val & (1 << 7) != 0 {self.set_flag(NEGATIVE_FLAG)} else {self.unset_flag(NEGATIVE_FLAG);}
     }
 
-    fn add(&mut self, val: u8) {
-        let mut a = self.read_reg(CPURegister::A);
-        if self.check_flag(CARRY_FLAG) {a +=1;};
-        match a.checked_add(val) {
-            Some(v) => {self.write_to_reg(CPURegister::A, v)},
-            None => {self.set_flag(OVERFLOW_FLAG); self.write_to_reg(CPURegister::A, a.wrapping_add(val))},
-        }
+    fn branch(&mut self, interconnect: &Interconnect, branch_on: BranchOn) {
+        let branch_target = interconnect.read_byte(self.get_pc() + 1);
+        let pc = self.pc + 2;
+        let branch = match branch_on {
+            BranchOn::Plus => {!self.check_flag(NEGATIVE_FLAG)},
+            BranchOn::Minus => {self.check_flag(NEGATIVE_FLAG)},
+            BranchOn::OverflowClear => {!self.check_flag(OVERFLOW_FLAG)},
+            BranchOn::OverflowSet => {self.check_flag(OVERFLOW_FLAG)},
+            BranchOn::CarryClear => {!self.check_flag(CARRY_FLAG)},
+            BranchOn::CarrySet => {self.check_flag(CARRY_FLAG)},
+            BranchOn::NotEqual => {!self.check_flag(ZERO_FLAG)},
+            BranchOn::Equal => {self.check_flag(ZERO_FLAG)},
+        };
+        if branch {self.pc = ((pc as i32) + (branch_target as i32)) as u16} else {self.increment_pc(2);}
+    }
 
-        if a + val == 0 {self.set_flag(ZERO_FLAG);}
+    // FIXME: This works...well enough
+    fn compare(&mut self, register: CPURegister, mem: u8) {
+        let reg = self.read_reg(register);
+        if reg == mem {
+            self.unset_flag(NEGATIVE_FLAG);
+            self.set_flag(ZERO_FLAG);
+            self.set_flag(CARRY_FLAG);
+        } else if reg < mem {
+            self.set_flag(NEGATIVE_FLAG);
+            self.unset_flag(ZERO_FLAG);
+            self.unset_flag(CARRY_FLAG);
+        } else if reg > mem {
+            self.unset_flag(NEGATIVE_FLAG);
+            self.unset_flag(ZERO_FLAG);
+            self.set_flag(CARRY_FLAG);
+            if (reg - mem) & (1 << 7) !=0 {self.set_flag(NEGATIVE_FLAG);}
+        }
+    }
+
+    fn decrement(&mut self, register: CPURegister) {
+        let val = self.read_reg(register);
+        self.write_to_reg(register, val.wrapping_sub(1));
+        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+    }
+
+    fn eor(&mut self, val: u8) {
+        let a = self.read_reg(CPURegister::A);
+        self.write_to_reg(CPURegister::A, a ^ val);
         if self.read_reg(CPURegister::A) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
         if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+    }
+
+    fn increment(&mut self, register: CPURegister) {
+        let val = self.read_reg(register);
+        self.write_to_reg(register, val.wrapping_add(1));
+        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+    }
+
+    fn jmp(&mut self, jump_target: u16) {
+        self.pc = jump_target;
+    }
+
+    fn load(&mut self, register: CPURegister, val: u8) {
+        self.write_to_reg(register, val);
+        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
     }
 
     fn ora(&mut self, val: u8) {
@@ -465,17 +549,6 @@ impl Cpu {
         if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
     }
 
-    fn and(&mut self, val: u8) {
-        let a = self.read_reg(CPURegister::A);
-        self.write_to_reg(CPURegister::A, a | val);
-        if self.read_reg(CPURegister::A) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
-        if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
-    }
-
-    fn jmp(&mut self, jump_target: u16) {
-        self.pc = jump_target;
-    }
-
     fn transfer(&mut self, from_reg: CPURegister, to_reg: CPURegister) {
         let val = self.read_reg(from_reg);
         self.write_to_reg(to_reg, val);
@@ -483,39 +556,13 @@ impl Cpu {
         if self.read_reg(to_reg) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
     }
 
-    fn load(&mut self, register: CPURegister, val: u8) {
-        self.write_to_reg(register, val);
-        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
-        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
-    }
-
     fn store(&mut self, interconnect: &mut Interconnect, addr: u16, register: CPURegister) {
         let val = self.read_reg(register);
         interconnect.write_byte(addr, val);
     }
 
-    fn branch(&mut self, interconnect: &Interconnect, branch_on: BranchOn) {
-        let branch_target = interconnect.read_byte(self.get_pc() + 1);
-        let pc = self.pc + 2;
-        let branch = match branch_on {
-            BranchOn::Plus => {!self.check_flag(NEGATIVE_FLAG)},
-            // BranchOn::Minus => {},
-            BranchOn::OverflowClear => {!self.check_flag(OVERFLOW_FLAG)},
-            BranchOn::OverflowSet => {self.check_flag(OVERFLOW_FLAG)},
-            BranchOn::CarryClear => {!self.check_flag(CARRY_FLAG)},
-            BranchOn::CarrySet => {self.check_flag(CARRY_FLAG)},
-            BranchOn::NotEqual => {!self.check_flag(ZERO_FLAG)},
-            BranchOn::Equal => {self.check_flag(ZERO_FLAG)},
-            _ => panic!("Unsupported branch type: {:?}", branch_on),
-        };
-        if branch {self.pc = ((pc as i32) + (branch_target as i32)) as u16} else {self.increment_pc(2);}
-    }
-
-    fn decrement(&mut self, register: CPURegister) {
-        let val = self.read_reg(register);
-        self.write_to_reg(register, val.wrapping_sub(1));
-        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
-        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+    fn sub(&mut self, val: u8) {
+        self.add(!val);
     }
 }
 

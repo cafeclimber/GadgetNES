@@ -4,16 +4,16 @@ enum_from_primitive!{
             // 0x00 => {}, // BRK
 
             // Stack    
-            // 0x08 => {}, // PHP       
-            // 0x28 => {}, // PLP       
-            // 0x48 => {}, // PHA       
-            // 0x68 => {}, // PLA       
+            PHP = 0x08,
+            PLP = 0x28,
+            PHA = 0x48,
+            PLA = 0x68,
             TXS = 0x9a,
             // 0xba => {}, // TSX       
 
             // Branch   
             BPL = 0x10,
-            // 0x30 => {}, // BMI       
+            BMI = 0x30,
             BVC = 0x50,
             BVS = 0x70,
             BCC = 0x90,
@@ -26,25 +26,25 @@ enum_from_primitive!{
             SEC = 0x38,
             // 0x58 => {}, // CLI      
             SEI = 0x78,
-            // 0xb8 => {}, // CLV      
+            CLV = 0xb8,
             CLD = 0xd8,
-            // 0xf8 => {}, // SED      
+            SED = 0xf8,
 
             // Register instructions
             DEY = 0x88,
             DEX = 0xca,
-            // 0xe8 => {}, // INX       
-            // 0xc8 => {}, // INY       
+            INX = 0xe8,
+            INY = 0xc8,
             TAX = 0xaa,
             TXA = 0x8a,
             // 0xa8 => {}, // TAY       
             // 0x98 => {}, // TYA       
 
             // Compares
-            // 0xc0 => {}, // CPY_imm  
+            CPYImm = 0xc0,
             // 0xc4 => {}, // CPY_z_pg 
             // 0xcc => {}, // CPY_abs  
-            // 0xe0 => {}, // CPX_imm  
+            CPXImm = 0xe0,
             // 0xe4 => {}, // CPX_z_pg 
             // 0xec => {}, // CPX_abs  
 
@@ -120,7 +120,7 @@ enum_from_primitive!{
 
             // 0x41 => {}, // EOR_inx_x
             // 0x45 => {}, // EOR_z_pg 
-            // 0x49 => {}, // EOR_imm  
+            EORImm = 0x49,
             // 0x4d => {}, // EOR_abs  
             // 0x51 => {}, // EOR_ind_y
             // 0x55 => {}, // EOR_dx   
@@ -138,7 +138,7 @@ enum_from_primitive!{
 
             // 0xc1 => {}, // CMP_inx_x
             // 0xc5 => {}, // CMP_z_pg 
-            // 0xc9 => {}, // CMP_imm  
+            CMPImm = 0xc9,
             // 0xcd => {}, // CMP_abs  
             // 0xd1 => {}, // CMP_ind_y
             // 0xd5 => {}, // CMP_dx   
@@ -147,7 +147,7 @@ enum_from_primitive!{
 
             // 0xe1 => {}, // SBC_inx_x
             // 0xe5 => {}, // SBC_z_pg 
-            // 0xe9 => {}, // SBC_imm  
+            SBCImm = 0xe9,
             // 0xed => {}, // SBC_abs  
             // 0xf1 => {}, // SBC_ind_y
             // 0xf5 => {}, // SBC_dx   

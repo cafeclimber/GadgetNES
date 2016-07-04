@@ -20,12 +20,8 @@ impl Nes {
     }
 
     pub fn run(&mut self) {
-        let mut count = 0;
         loop {
-            if count > 100 {return} else{
             self.cpu.run_instr(&mut self.interconnect);
-            count += 1;
-            }
         }
     }
 }
