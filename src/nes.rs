@@ -1,5 +1,4 @@
 use cpu::Cpu;
-use mapper::*;
 use interconnect::Interconnect;
 
 pub struct Nes {
@@ -18,13 +17,15 @@ impl Nes {
     pub fn power_up (&mut self, cart_rom: Vec<u8>) {
         self.cpu.power_up();
         self.interconnect.power_up(cart_rom);
-        println!("{:#?}\n", self.cpu);
     }
 
     pub fn run(&mut self) {
+        let mut count = 0;
         loop {
+            if count > 100 {return} else{
             self.cpu.run_instr(&mut self.interconnect);
-            println!("{:#?}\n", self.cpu);
+            count += 1;
+            }
         }
     }
 }

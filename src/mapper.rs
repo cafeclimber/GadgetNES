@@ -2,9 +2,9 @@ use super::cart::RomHeader;
 
 pub trait Mapper {
     fn prg_rom_read(&self, addr: u16) -> u8;
-    fn prg_rom_write(&mut self, addr: u16, val: u8);
+    fn prg_ram_read(&self, addr: u16) -> u8;
+    fn prg_ram_write(&mut self, addr: u16, val: u8);
     fn chr_rom_read(&self, addr: u16) -> u8;
-    fn chr_rom_write(&mut self, addr: u16, val: u8);
     fn load_rom(&mut self, rom: Vec<u8>);
 }
 
@@ -42,27 +42,37 @@ impl Mapper0 {
 
 impl Mapper for Mapper0 {
     fn prg_rom_read(&self, addr: u16) -> u8 {
-        if self.prg_rom.len() > 0x4000 {
+        if addr < 0x8000 {
+            panic!("Attempted to read from RAM using ROM Read");
+        } else if self.prg_rom.len() > 16392 {
             self.prg_rom[addr as usize & 0x7fff]
         } else {
             self.prg_rom[addr as usize & 0x3fff]
         }
     }
 
-    fn prg_rom_write(&mut self, addr: u16, val: u8) {}
+    // TODO: Correct?
+    fn prg_ram_read(&self, addr: u16) -> u8 {
+        self.prg_ram[addr as usize]
+    }
+
+    fn prg_ram_write(&mut self, addr: u16, val: u8) {
+        self.prg_ram[addr as usize] = val;
+    }
 
     fn chr_rom_read(&self, addr: u16) -> u8 {
-        if self.prg_rom.len() > 0x4000 {
+        println!("CHR Read: {:#x}", addr);
+        if addr < 0x8000 {
+            panic!("Attempted to read from RAM using CHR ROM Read");
+        } else if self.prg_rom.len() > 16392 {
             self.prg_rom[addr as usize & 0x7fff]
         } else {
             self.prg_rom[addr as usize & 0x3fff]
         }
     }
 
-    fn chr_rom_write(&mut self, addr: u16, val: u8) {}
-
     fn load_rom(&mut self, rom: Vec<u8>) {
-        self.prg_rom = rom[0..16392].to_owned();
+        self.prg_rom = rom[16..16392].to_owned();
         self.chr = rom[16392..].to_owned();
     }
 }

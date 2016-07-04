@@ -1,6 +1,6 @@
 use std::fmt;
-use super::mapper::*;
 use super::interconnect::Interconnect;
+use super::instructions::Instruction;
 
 const NEGATIVE_FLAG:  u8 = 1 << 7;
 const OVERFLOW_FLAG:  u8 = 1 << 6;
@@ -29,6 +29,21 @@ pub struct Cpu {
     status: u8, // Status register
 }
 
+#[derive(Debug)]
+enum AddressingMode {
+    Accumulator,
+    Implied,
+    Immediate,
+    Absolute,
+    ZeroPage,
+    Relative,
+    AbsoluteIndexed(CPURegister),
+    ZeroPageIndexed(CPURegister),
+    IndexedIndirect,
+    IndirectIndexed,
+}
+
+#[derive(Debug)]
 enum BranchOn {
     Plus,
     Minus,
@@ -59,7 +74,7 @@ impl Cpu {
             x: 0,
             y: 0,
 
-            pc: 0x10, // TODO make this a result of header information
+            pc: 0, // TODO make this a result of header information
 
             stack_pointer: 0,
 
@@ -68,13 +83,11 @@ impl Cpu {
     }
 
     pub fn power_up(&mut self) {
-        self.status = 0x34;
+        self.status = 0x24;
         self.stack_pointer = 0xfd;
     }
 
     fn check_flag(&mut self, flag: u8) -> bool {
-        println!("Check flag: {:#b} value: {:#b}", flag, self.read_reg(CPURegister::Status));
-        println!("Eval: {:?}", self.read_reg(CPURegister::Status) & flag != 0);
         self.read_reg(CPURegister::Status) & flag != 0
     }
     
@@ -92,10 +105,17 @@ impl Cpu {
         self.stack_pointer -= 1;
     }
 
-    fn push_return_addr(&mut self, interconnect: &mut Interconnect, value: u16) {
-        let addr = self.read_reg(CPURegister::StackPointer) as u16 | 0x100;
-        interconnect.write_word(addr, value);
+    fn push_return_addr(&mut self, interconnect: &mut Interconnect) {
+        let addr = (self.read_reg(CPURegister::StackPointer) as u16) | 0x100;
+        interconnect.write_word(addr, self.pc + 2);
         self.stack_pointer -= 2;
+    }
+
+    fn pop_return_addr(&mut self, interconnect: &mut Interconnect) -> u16 {
+        self.stack_pointer += 2;
+        let addr = self.read_reg(CPURegister::StackPointer) as u16 | 0x100;
+        let ret_addr = interconnect.read_word(addr) ;
+        ret_addr
     }
 
     fn get_pc(&self) -> u16 {
@@ -127,244 +147,255 @@ impl Cpu {
         }
     }
 
-    // IDEA Make each instruction return tuple of status regs to set? to call after match arm? closure perhaps to form u8?
-    // TODO: Make load function
-    // TODO: Make functions to get operands based on addressing modes
+    // IDEA: Make each instruction return tuple of status regs to set? to call after match arm? closure perhaps to form u8?
+    // TODO: Fetch instruction, then run it. Should make printing better
+    // TODO: Compare with logfile.
+    // TODO: Cycles
     pub fn run_instr(&mut self, interconnect: &mut Interconnect) {
-        let instr = interconnect.read_byte(self.get_pc());
-        println!("instr: {:#x}", instr);
+        use enum_primitive::FromPrimitive;
+        use instructions::Instruction::*;
+        let raw_instr = interconnect.read_byte(self.get_pc());
+        let instr = Instruction::from_u8(raw_instr).unwrap_or_else(|| {
+            panic!("Unrecognized instruction: {:#x}", raw_instr);
+        });
+        println!("{:X} {:?} \t A:{:2X} X:{:2X} Y:{:2X} P:{:2X} SP:{:2X}", self.pc+0x8000, instr, self.a, self.x, self.y, self.status, self.stack_pointer);
         match instr {
             // TODO: Implement unofficial opcodes
 
             // FIXME: ...wat
-            0x00 => {let ret_addr = self.get_pc();
+            /*BRK => {let ret_addr = self.get_pc();
                      self.push_return_addr(interconnect, ret_addr);
                      let flags = self.read_reg(CPURegister::StackPointer);
                      self.push_byte_stack(interconnect, flags);
                      self.set_flag(IRQ_FLAG);
                      let jmp_addr = interconnect.read_word(IRQBRK_VECTOR);
-                     self.jmp(jmp_addr);}, // BRK
+                     self.jmp(jmp_addr);}, // BRK*/
 
             // Stack    
-            // 0x08 => {}, // PHP       
-            // 0x28 => {}, // PLP       
-            // 0x48 => {}, // PHA       
-            // 0x68 => {}, // PLA       
-            0x9a => {self.transfer(CPURegister::X, CPURegister::StackPointer); self.increment_pc(1);}, // TXS       
-            // 0xba => {}, // TSX       
+            // PHP => {},
+            // PLP => {},
+            // PHA => {},
+            // PLA => {},
+            TXS => {self.transfer(CPURegister::X, CPURegister::StackPointer); self.increment_pc(1);},
+            // TSX => {},
 
             // Branch   
-            0x10 => {let branch_target = interconnect.read_byte(self.get_pc() + 1);
-                     self.branch(BranchOn::Plus, branch_target);}, // BPL       
-            // 0x30 => {}, // BMI       
-            // 0x50 => {}, // BVC       
-            // 0x70 => {}, // BVS       
-            // 0x90 => {}, // BCC       
-            // 0xb0 => {}, // BCS       
-            0xd0 => {let branch_target = interconnect.read_byte(self.get_pc() + 1);
-                     self.branch(BranchOn::NotEqual, branch_target);}, // BNE       
-            // 0xf0 => {}, // BEQ       
+            BPL => {self.branch(interconnect, BranchOn::Plus);},
+            // BMI => {},
+            BVC => {self.branch(interconnect, BranchOn::OverflowClear);},
+            BVS => {self.branch(interconnect, BranchOn::OverflowSet);},
+            BCC => {self.branch(interconnect, BranchOn::CarryClear);},
+            BCS => {self.branch(interconnect, BranchOn::CarrySet);},
+            BNE => {self.branch(interconnect, BranchOn::NotEqual);},
+            BEQ => {self.branch(interconnect, BranchOn::Equal);},
 
             // Flag instructions
-            0x18 => {self.unset_flag(CARRY_FLAG); self.increment_pc(1);}, // CLC      
-            // 0x38 => {}, // SEC      
-            // 0x58 => {}, // CLI      
-            0x78 => {self.set_flag(IRQ_FLAG); self.increment_pc(1);}, // SEI      
-            // 0xb8 => {}, // CLV      
-            0xd8 => {self.unset_flag(DECIMAL_FLAG); self.increment_pc(1);}, // CLD      
-            // 0xf8 => {}, // SED      
+            CLC => {self.unset_flag(CARRY_FLAG); self.increment_pc(1);},
+            SEC => {self.set_flag(CARRY_FLAG); self.increment_pc(1);},
+            // CLI => {},
+            SEI => {self.set_flag(IRQ_FLAG); self.increment_pc(1);},
+            // CLV => {},
+            CLD => {self.unset_flag(DECIMAL_FLAG); self.increment_pc(1);},
+            // SED => {},
 
             // Register instructions
-            0x88 => {self.decrement(CPURegister::Y); self.increment_pc(1);}, // DEY       
-            0xca => {self.decrement(CPURegister::X); self.increment_pc(1);}, // DEX       
-            // 0xe8 => {}, // INX       
-            // 0xc8 => {}, // INY       
-            // 0xaa => {}, // TAX       
-            0x8a => {self.transfer(CPURegister::X, CPURegister::A); self.increment_pc(1);}, // TXA       
-            // 0xa8 => {}, // TAY       
-            // 0x98 => {}, // TYA       
+            DEY => {self.decrement(CPURegister::Y); self.increment_pc(1);},
+            DEX => {self.decrement(CPURegister::X); self.increment_pc(1);},
+            // INX => {},
+            // INY => {},
+            TAX => {self.transfer(CPURegister::A, CPURegister::X); self.increment_pc(1);},
+            TXA => {self.transfer(CPURegister::X, CPURegister::A); self.increment_pc(1);},
+            // TAY => {},
+            // TYA => {},
 
             // Compares
-            // 0xc0 => {}, // CPY_imm  
-            // 0xc4 => {}, // CPY_z_pg 
-            // 0xcc => {}, // CPY_abs  
-            // 0xe0 => {}, // CPX_imm  
-            // 0xe4 => {}, // CPX_z_pg 
-            // 0xec => {}, // CPX_abs  
+            // CPY_imm => {}, 
+            // CPY_z_pg=> {}, 
+            // CPY_abs => {}, 
+            // CPX_imm => {}, 
+            // CPX_z_pg=> {}, 
+            // CPX_abs => {}, 
 
             // Loads
-            // 0xa1 => {}, // LDA_inx_x 
-            // 0xa5 => {}, // LDA_z_pg  
-            0xa9 => {let val = self.immediate(interconnect);
+            // LDA_inx_x=> {}, 
+            LDAZpg => {let val = self.zero_page(interconnect);
                      self.load(CPURegister::A, val);
-                     self.increment_pc(2);}, // LDA_imm   
-            0xad => {let val = self.absolute(interconnect);
+                     self.increment_pc(2);}, 
+            LDAImm => {let val = self.immediate(interconnect);
                      self.load(CPURegister::A, val);
-                     self.increment_pc(3);}, // LDA_abs   
-            // 0xb1 => {}, // LDA_ind_y 
-            // 0xb5 => {}, // LDA_dx    
-            // 0xbd => {}, // LDA_ax    
-            // 0xb9 => {}, // LDA_ay    
+                     self.increment_pc(2);}, 
+            LDAAbs => {let val = self.absolute(interconnect);
+                     self.load(CPURegister::A, val);
+                     self.increment_pc(3);}, 
+            LDAIndY => {let val = self.indirect_indexed(interconnect);
+                     self.load(CPURegister::A, val);
+                     self.increment_pc(2);}, 
+            // LDA_dx   => {}, 
+            // LDA_ax   => {}, 
+            // LDA_ay   => {}, 
 
-            0xa2 => {let val = self.immediate(interconnect);
+            LDXImm => {let val = self.immediate(interconnect);
                      self.load(CPURegister::X, val);
-                     self.increment_pc(2);}, // LDX_imm  
-            0xa6 => {let val = self.zero_page(interconnect);
+                     self.increment_pc(2);},
+            LDXZpg => {let val = self.zero_page(interconnect);
                      self.load(CPURegister::X, val);
-                     self.increment_pc(2);}, // LDX_z_pg 
-            // 0xae => {}, // LDX_abs  
-            // 0xb6 => {}, // LDX_dy   
-            // 0xbe => {}, // LDX_ay   
+                     self.increment_pc(2);},
+            // LDX_abs => {}, 
+            // LDX_dy  => {}, 
+            // LDX_ay  => {}, 
 
-            0xa0 => {let val = self.immediate(interconnect);
+            LDYImm => {let val = self.immediate(interconnect);
                      self.load(CPURegister::Y, val);
-                     self.increment_pc(2);}, // LDY_imm  
-            // 0xa4 => {}, // LDY_z_pg 
-            // 0xac => {}, // LDY_abs  
-            // 0xb4 => {}, // LDY_dx   
-            // 0xbc => {}, // LDY_ax   
+                     self.increment_pc(2);},
+            // LDY_z_pg=> {}, 
+            // LDY_abs => {}, 
+            // LDY_dx  => {}, 
+            // LDY_ax  => {}, 
 
             // Stores
-            // 0x81 => {}, // STA_inx_x
-            // 0x85 => {}, // STA_z_pg 
-            // 0x8d => {}, // STA_abs  
-            0x91 => {let addr = interconnect.read_byte(self.get_pc() + 1);
-                     let sum_addr = addr + self.read_reg(CPURegister::X);
-                     let addr = interconnect.read_word(sum_addr as u16);
-                     self.store(interconnect, addr, CPURegister::A);
-                     self.increment_pc(2);}, // STA_ind_y
-            // 0x95 => {}, // STA_dx   
-            // 0x9d => {}, // STA_ax   
-            // 0x99 => {}, // STA_ay   
+            // STA_inx_=> {}, 
+            STAZpg => {let addr = interconnect.read_byte(self.get_pc() + 1);
+                       self.store(interconnect, addr as u16, CPURegister::A);
+                       self.increment_pc(2);},
+            STAAbs => {let addr = interconnect.read_word(self.get_pc() + 1);
+                       self.store(interconnect, addr, CPURegister::A);
+                       self.increment_pc(3);},
+            STAIndY => {let addr = interconnect.read_byte(self.get_pc() + 1);
+                        let sum_addr = addr + self.read_reg(CPURegister::X);
+                        let addr = interconnect.read_word(sum_addr as u16);
+                        self.store(interconnect, addr, CPURegister::A);
+                        self.increment_pc(2);},
+            // STA_dx  => {}, 
+            // STA_ax  => {}, 
+            // STA_ay  => {}, 
 
-            // 0x86 => {}, // STX_z_pg 
-            0x8e => {let addr = interconnect.read_word(self.get_pc() + 1);
-                     self.store(interconnect, addr, CPURegister::X);
-                     self.increment_pc(3);}, // STX_abs  
-            // 0x96 => {}, // STX_dy   
-
-            0x84 => {let temp_addr = interconnect.read_byte(self.get_pc() + 1);
-                     let addr = interconnect.read_word(temp_addr as u16);
-                     self.store(interconnect, addr, CPURegister::Y);
-                     self.increment_pc(2);}, // STY_z_pg 
-            // 0x8c => {}, // STY_abs  
-            // 0x94 => {}, // STY_dx   
+            STXZpg => {let addr = interconnect.read_byte(self.get_pc() + 1);
+                       self.store(interconnect, addr as u16, CPURegister::X);
+                       self.increment_pc(2);},
+            STXAbs => {let addr = interconnect.read_word(self.get_pc() + 1);
+                       self.store(interconnect, addr, CPURegister::X);
+                       self.increment_pc(3);},
+            // STX_dy => {}, 
+            STYZpg => {let temp_addr = interconnect.read_byte(self.get_pc() + 1);
+                       let addr = interconnect.read_word(temp_addr as u16);
+                       self.store(interconnect, addr, CPURegister::Y);
+                       self.increment_pc(2);},
+            // STY_abs => {}, 
+            // STY_dx  => {}, 
 
             // Jumps
-            0x20 => {let ret_addr = self.get_pc() + 2;
-                     self.push_return_addr(interconnect, ret_addr);
-                     let addr = interconnect.read_word(self.get_pc() + 1);
-                     self.jmp(addr - 0x8000);}, // JSR_abs  
-            0x4c => {let target_addr = interconnect.read_word(self.get_pc() + 1);
-                     self.jmp(target_addr - 0x8000);}, // JMP_abs  
-            // 0x6c => {}, // JMP_ind  
+            JSRAbs => {self.push_return_addr(interconnect);
+                       let addr = interconnect.read_word(self.get_pc() + 1);
+                       self.jmp(addr - 0x8000);},
+            JMPAbs => {let target_addr = interconnect.read_word(self.get_pc() + 1);
+                       self.jmp(target_addr - 0x8000);},
+            // JMP_ind => {}, 
 
-            // 0x40 => {}, // RTI      
-            // 0x60 => {}, // RTS      
+            // RTI     => {}, 
+            RTS => {let ret_addr = self.pop_return_addr(interconnect); self.jmp(ret_addr);},
 
             // Bit tests
-            // 0x24 => {}, // BIT_z_pg 
-            // 0x2c => {}, // BIT_abs  
+            BITZpg => {let val = self.zero_page(interconnect); self.bit(val); self.increment_pc(2);},
+            // BIT_abs => {}, 
 
             // ALU operations
-            // 0x01 => {}, // ORA_inx_x
-            // 0x05 => {}, // ORA_z_pg 
-            // 0x09 => {}, // ORA_imm  
-            // 0x0d => {}, // ORA_abs  
-            // 0x11 => {}, // ORA_ind_y
-            // 0x15 => {}, // ORA_dx   
-            // 0x19 => {}, // ORA_ax   
-            // 0x1d => {}, // ORA_ay   
+            // ORA_inx_=> {}, 
+            // ORA_z_pg=> {}, 
+            ORAImm => {let imm = self.immediate(interconnect); self.ora(imm); self.increment_pc(2);},
+            // ORA_abs => {}, 
+            // ORA_ind_=> {}, 
+            // ORA_dx  => {}, 
+            // ORA_ax  => {}, 
+            // ORA_ay  => {}, 
 
-            // 0x21 => {}, // AND_inx_x
-            // 0x25 => {}, // AND_z_pg 
-            // 0x29 => {}, // AND_imm  
-            // 0x2d => {}, // AND_abs  
-            // 0x31 => {}, // AND_ind_y
-            // 0x35 => {}, // AND_dx   
-            // 0x39 => {}, // AND_ax   
-            // 0x3d => {}, // AND_ay   
+            // AND_inx_=> {}, 
+            // AND_z_pg=> {}, 
+            ANDImm => {let val = self.immediate(interconnect); self.and(val); self.increment_pc(2);},
+            // AND_abs => {}, 
+            // AND_ind_=> {}, 
+            // AND_dx  => {}, 
+            // AND_ax  => {}, 
+            // AND_ay  => {}, 
 
-            // 0x41 => {}, // EOR_inx_x
-            // 0x45 => {}, // EOR_z_pg 
-            // 0x49 => {}, // EOR_imm  
-            // 0x4d => {}, // EOR_abs  
-            // 0x51 => {}, // EOR_ind_y
-            // 0x55 => {}, // EOR_dx   
-            // 0x59 => {}, // EOR_ax   
-            // 0x5d => {}, // EOR_ay   
+            // EOR_inx_=> {}, 
+            // EOR_z_pg=> {}, 
+            // EOR_imm => {}, 
+            // EOR_abs => {}, 
+            // EOR_ind_=> {}, 
+            // EOR_dx  => {}, 
+            // EOR_ax  => {}, 
+            // EOR_ay  => {}, 
 
-            // 0x61 => {}, // ADC_inx_x
-            // 0x65 => {}, // ADC_z_pg 
-            // 0x69 => {}, // ADC_imm  
-            // 0x6d => {}, // ADC_abs  
-            // 0x71 => {}, // ADC_ind_y
-            // 0x75 => {}, // ADC_dx   
-            // 0x79 => {}, // ADC_ax   
-            // 0x7d => {}, // ADC_ay   
+            // ADC_inx_=> {}, 
+            // ADC_z_pg=> {}, 
+            ADCImm => {let val = self.immediate(interconnect); self.add(val); self.increment_pc(2);},
+            // ADC_abs => {}, 
+            // ADC_ind_=> {}, 
+            // ADC_dx  => {}, 
+            // ADC_ax  => {}, 
+            // ADC_ay  => {}, 
 
-            // 0xc1 => {}, // CMP_inx_x
-            // 0xc5 => {}, // CMP_z_pg 
-            // 0xc9 => {}, // CMP_imm  
-            // 0xcd => {}, // CMP_abs  
-            // 0xd1 => {}, // CMP_ind_y
-            // 0xd5 => {}, // CMP_dx   
-            // 0xd9 => {}, // CMP_ax   
-            // 0xdd => {}, // CMP_ay   
+            // CMP_inx_=> {}, 
+            // CMP_z_pg=> {}, 
+            // CMP_imm => {}, 
+            // CMP_abs => {}, 
+            // CMP_ind_=> {}, 
+            // CMP_dx  => {}, 
+            // CMP_ax  => {}, 
+            // CMP_ay  => {}, 
 
-            // 0xe1 => {}, // SBC_inx_x
-            // 0xe5 => {}, // SBC_z_pg 
-            // 0xe9 => {}, // SBC_imm  
-            // 0xed => {}, // SBC_abs  
-            // 0xf1 => {}, // SBC_ind_y
-            // 0xf5 => {}, // SBC_dx   
-            // 0xf9 => {}, // SBC_ax   
-            // 0xfd => {}, // SBC_ay   
+            // SBC_inx_=> {}, 
+            // SBC_z_pg=> {}, 
+            // SBC_imm => {}, 
+            // SBC_abs => {}, 
+            // SBC_ind_=> {}, 
+            // SBC_dx  => {}, 
+            // SBC_ax  => {}, 
+            // SBC_ay  => {}, 
                  
-            // 0x06 => {}, // ASL_z_pg 
-            // 0x0a => {}, // ASL      
-            // 0x0e => {}, // ASL_abs  
-            // 0x16 => {}, // ASL_dx   
-            // 0x1e => {}, // ASL_ax   
+            // ASL_z_pg=> {}, 
+            // ASL     => {}, 
+            // ASL_abs => {}, 
+            // ASL_dx  => {}, 
+            // ASL_ax  => {}, 
 
-            // 0x46 => {}, // LSR_z_pg 
-            // 0x4a => {}, // LSR      
-            // 0x4e => {}, // LSR_abs  
-            // 0x56 => {}, // LSR_dx   
-            // 0x5e => {}, // LSR_ax   
+            // LSR_z_pg=> {}, 
+            // LSR     => {}, 
+            // LSR_abs => {}, 
+            // LSR_dx  => {}, 
+            // LSR_ax  => {}, 
 
             // Rotates
-            // 0x26 => {}, // ROL_z_pg 
-            // 0x2a => {}, // ROL      
-            // 0x2e => {}, // ROL_abs  
-            // 0x36 => {}, // ROL_dx   
-            // 0x3e => {}, // ROL_ax   
+            // ROL_z_pg=> {}, 
+            // ROL     => {}, 
+            // ROL_abs => {}, 
+            // ROL_dx  => {}, 
+            // ROL_ax  => {}, 
 
-            // 0x66 => {}, // ROR_z_pg 
-            // 0x6a => {}, // ROR      
-            // 0x6e => {}, // ROR_abs  
-            // 0x76 => {}, // ROR_dx   
-            // 0x7e => {}, // ROR_ax   
+            // ROR_z_pg=> {}, 
+            // ROR     => {}, 
+            // ROR_abs => {}, 
+            // ROR_dx  => {}, 
+            // ROR_ax  => {}, 
 
             // Increments
-            0xc6 => {let addr = interconnect.read_byte(self.get_pc() + 1);
+            DECZpg => {let addr = interconnect.read_byte(self.get_pc() + 1);
                      let val = interconnect.read_byte(addr as u16);
                      val.wrapping_sub(1);
                      interconnect.write_byte(addr as u16, val);
-                     self.increment_pc(2);}, // DEC_z_pg 
-            // 0xce => {}, // DEC_abs  
-            // 0xd6 => {}, // DEC_dx   
-            // 0xde => {}, // DEC_ax   
+                     self.increment_pc(2);},
+            // DEC_abs => {}, 
+            // DEC_dx  => {}, 
+            // DEC_ax  => {}, 
 
-            // 0xe6 => {}, // INC_z_pg 
-            // 0xee => {}, // INC_abs  
-            // 0xf6 => {}, // INC_dx   
-            // 0xfe => {, // INC_ax   
+            // INC_z_pg=> {}, 
+            // INC_abs => {}, 
+            // INC_dx  => {}, 
+            // INC_ax  => {}, 
 
             // The ever important nop
             // Observe all its majesty
-            // 0xea => {}, // NOP
-            _ => panic!("Unrecognized instruction: {:#x}", instr),
+            NOP => {self.increment_pc(1);},
         }
     }
 
@@ -408,10 +439,37 @@ impl Cpu {
     }
 
     // Instruction abstractions
-    fn compare(&mut self, reg_val: u8, comp_val: u8) {
+    fn bit(&mut self, val: u8) {
+        if val & self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);}
+        if val & (1 << 6) != 0 {self.set_flag(OVERFLOW_FLAG)} else {self.unset_flag(OVERFLOW_FLAG);}
+        if val & (1 << 7) != 0 {self.set_flag(NEGATIVE_FLAG)} else {self.unset_flag(NEGATIVE_FLAG);}
     }
 
-    fn eor(&mut self, val: u8) {
+    fn add(&mut self, val: u8) {
+        let mut a = self.read_reg(CPURegister::A);
+        if self.check_flag(CARRY_FLAG) {a +=1;};
+        match a.checked_add(val) {
+            Some(v) => {self.write_to_reg(CPURegister::A, v)},
+            None => {self.set_flag(OVERFLOW_FLAG); self.write_to_reg(CPURegister::A, a.wrapping_add(val))},
+        }
+
+        if a + val == 0 {self.set_flag(ZERO_FLAG);}
+        if self.read_reg(CPURegister::A) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+    }
+
+    fn ora(&mut self, val: u8) {
+        let a = self.read_reg(CPURegister::A);
+        self.write_to_reg(CPURegister::A, a | val);
+        if self.read_reg(CPURegister::A) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+    }
+
+    fn and(&mut self, val: u8) {
+        let a = self.read_reg(CPURegister::A);
+        self.write_to_reg(CPURegister::A, a | val);
+        if self.read_reg(CPURegister::A) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
     }
 
     fn jmp(&mut self, jump_target: u16) {
@@ -436,17 +494,21 @@ impl Cpu {
         interconnect.write_byte(addr, val);
     }
 
-    fn branch(&mut self, branch_on: BranchOn, branch_target: u8) {
-        match branch_on {
-            BranchOn::Plus => {if self.check_flag(NEGATIVE_FLAG) {self.increment_pc(2)} else {self.pc = ((self.pc as i32) + (branch_target as i32)) as u16}},
-            BranchOn::Minus => {},
-            BranchOn::OverflowClear => {},
-            BranchOn::OverflowSet => {},
-            BranchOn::CarryClear => {},
-            BranchOn::CarrySet => {},
-            BranchOn::NotEqual => {if self.check_flag(ZERO_FLAG) {self.pc = ((self.pc as i32) + (branch_target as i32)) as u16} else {self.increment_pc(2)}},
-            BranchOn::Equal => {},
-        }
+    fn branch(&mut self, interconnect: &Interconnect, branch_on: BranchOn) {
+        let branch_target = interconnect.read_byte(self.get_pc() + 1);
+        let pc = self.pc + 2;
+        let branch = match branch_on {
+            BranchOn::Plus => {!self.check_flag(NEGATIVE_FLAG)},
+            // BranchOn::Minus => {},
+            BranchOn::OverflowClear => {!self.check_flag(OVERFLOW_FLAG)},
+            BranchOn::OverflowSet => {self.check_flag(OVERFLOW_FLAG)},
+            BranchOn::CarryClear => {!self.check_flag(CARRY_FLAG)},
+            BranchOn::CarrySet => {self.check_flag(CARRY_FLAG)},
+            BranchOn::NotEqual => {!self.check_flag(ZERO_FLAG)},
+            BranchOn::Equal => {self.check_flag(ZERO_FLAG)},
+            _ => panic!("Unsupported branch type: {:?}", branch_on),
+        };
+        if branch {self.pc = ((pc as i32) + (branch_target as i32)) as u16} else {self.increment_pc(2);}
     }
 
     fn decrement(&mut self, register: CPURegister) {
@@ -460,8 +522,8 @@ impl Cpu {
 // TODO: Move this to a propper debugger
 impl fmt::Debug for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "CPU: a:0x{:x} x:0x{:x} y:0x{:x} pc:0x{:x} stack_pointer:0x{:x} status:0b{:#b}",
-               self.a, self.x, self.y, self.pc, self.stack_pointer, self.status)
+        write!(f, "{:#x} a:0x{:x} x:0x{:x} y:0x{:x} stack_pointer:0x{:x} status:0b{:#b}",
+               self.pc, self.a, self.x, self.y,  self.stack_pointer, self.status)
     }
 }
 

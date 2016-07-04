@@ -33,14 +33,19 @@ impl Cartridge  {
         }
     }
 
-    // TODO Make a match once I implement the rest of the cartridge
     pub fn read_cart(&self, addr: u16) -> u8 {
-        0
+        match addr {
+            0x6000...0x7fff => self.mapper.prg_ram_read(addr),
+            0x8000...0xffff => self.mapper.prg_rom_read(addr),
+            _ => panic!("Attempt to read from unrecognized memory location: {:#x}", addr),
+        }
     }
 
     pub fn write_byte_to_cart(&mut self, addr: u16, val: u8) {
+        match addr {
+            0x6000...0x7fff => self.mapper.prg_ram_write(addr, val),
+            _ => panic!("Attempt to write to unrecognized memory location: {:#x}", addr),
+        }
     }
-
-    // pub fn new_mapper() -> Mapper {}
 }
 

@@ -11,6 +11,7 @@ mod cart;
 mod mem_map;
 mod mapper;
 mod interconnect;
+mod instructions;
 
 #[macro_use]
 extern crate enum_primitive;
