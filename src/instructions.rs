@@ -1,7 +1,7 @@
 enum_from_primitive!{
     #[derive(Debug)]
     pub enum Instruction {
-            // 0x00 => {}, // BRK
+            // BRK = 0x00,
 
             // Stack    
             PHP = 0x08,
@@ -24,7 +24,7 @@ enum_from_primitive!{
             // Flag instructions
             CLC = 0x18,
             SEC = 0x38,
-            // 0x58 => {}, // CLI      
+            // CLI = 0x58,
             SEI = 0x78,
             CLV = 0xb8,
             CLD = 0xd8,
@@ -42,153 +42,153 @@ enum_from_primitive!{
 
             // Compares
             CPYImm = 0xc0,
-            // 0xc4 => {}, // CPY_z_pg 
-            // 0xcc => {}, // CPY_abs  
+            // CPY_z_pg = 0xc4,
+            // CPY_abs = 0xcc,
             CPXImm = 0xe0,
-            // 0xe4 => {}, // CPX_z_pg 
-            // 0xec => {}, // CPX_abs  
+            // CPX_z_pg = 0xe4,
+            // CPX_abs = 0xec,
 
             // Loads
-            // 0xa1 => {}, // LDA_inx_x 
+            LDAInxX = 0xa1,
             LDAZpg = 0xa5,
             LDAImm = 0xa9,
             LDAAbs = 0xad,
             LDAIndY = 0xb1,
-            // 0xb5 => {}, // LDA_dx    
-            // 0xbd => {}, // LDA_ax    
-            // 0xb9 => {}, // LDA_ay    
+            // LDAZPgX = 0xb5,
+            // LDA_ax = 0xbd,
+            // LDA_ay = 0xb9,
 
             LDXImm = 0xa2,
             LDXZpg = 0xa6,
             LDXAbs = 0xae,
-            // 0xb6 => {}, // LDX_dy   
-            // 0xbe => {}, // LDX_ay   
+            // LDXZPgY = 0xb6,
+            // LDX_ay = 0xbe,
 
             LDYImm  = 0xa0,
-            // 0xa4 => {}, // LDY_z_pg 
-            // 0xac => {}, // LDY_abs  
-            // 0xb4 => {}, // LDY_dx   
-            // 0xbc => {}, // LDY_ax   
+            // LDY_z_pg = 0xa4,
+            // LDY_abs = 0xac,
+            // LDYZPgX = 0xb4,
+            // LDY_ax = 0xbc,
 
             // Stores
-            // 0x81 => {}, // STA_inx_x
+            // STA_inx_x = 0x81,
             STAZpg = 0x85,
             STAAbs  = 0x8d,
             STAIndY = 0x91,
-            // 0x95 => {}, // STA_dx   
-            // 0x9d => {}, // STA_ax   
-            // 0x99 => {}, // STA_ay   
+            // STAZPgX = 0x95,
+            // STA_ax = 0x9d,
+            // STA_ay = 0x99,
 
             STXZpg = 0x86,
             STXAbs  = 0x8e,
-            // 0x96 => {}, // STX_dy   
+            // STXZPgY = 0x96,
 
             STYZpg = 0x84,
-            // 0x8c => {}, // STY_abs  
-            // 0x94 => {}, // STY_dx   
+            // STY_abs = 0x8c,
+            // STYZPgX = 0x94,
 
             // Jumps
             JSRAbs  = 0x20,
             JMPAbs  = 0x4c,
-            // 0x6c => {}, // JMP_ind  
+            // JMP_ind = 0x6c,
 
-            // 0x40 => {}, // RTI      
+            RTI = 0x40,
             RTS = 0x60,
 
             // Bit tests
             BITZpg = 0x24,
-            // 0x2c => {}, // BIT_abs  
+            // BIT_abs = 0x2c,
 
             // ALU operations
-            // 0x01 => {}, // ORA_inx_x
-            // 0x05 => {}, // ORA_z_pg 
+            // ORA_inx_x = 0x01,
+            // ORA_z_pg = 0x05,
             ORAImm  = 0x09,
-            // 0x0d => {}, // ORA_abs  
-            // 0x11 => {}, // ORA_ind_y
-            // 0x15 => {}, // ORA_dx   
-            // 0x19 => {}, // ORA_ax   
-            // 0x1d => {}, // ORA_ay   
+            // ORA_abs = 0x0d,
+            // ORA_ind_y = 0x11,
+            // ORAZPgX = 0x15,
+            // ORA_ax = 0x19,
+            // ORA_ay = 0x1d,
 
-            // 0x21 => {}, // AND_inx_x
-            // 0x25 => {}, // AND_z_pg 
+            // AND_inx_x = 0x21,
+            // AND_z_pg = 0x25,
             ANDImm  = 0x29,
-            // 0x2d => {}, // AND_abs  
-            // 0x31 => {}, // AND_ind_y
-            // 0x35 => {}, // AND_dx   
-            // 0x39 => {}, // AND_ax   
-            // 0x3d => {}, // AND_ay   
+            // AND_abs = 0x2d,
+            // AND_ind_y = 0x31,
+            ANDZPgX = 0x35,
+            // AND_ax = 0x39,
+            // AND_ay = 0x3d,
 
-            // 0x41 => {}, // EOR_inx_x
-            // 0x45 => {}, // EOR_z_pg 
+            // EOR_inx_x = 0x41,
+            // EOR_z_pg = 0x45,
             EORImm = 0x49,
-            // 0x4d => {}, // EOR_abs  
-            // 0x51 => {}, // EOR_ind_y
-            // 0x55 => {}, // EOR_dx   
-            // 0x59 => {}, // EOR_ax   
-            // 0x5d => {}, // EOR_ay   
+            // EOR_abs = 0x4d,
+            // EOR_ind_y = 0x51,
+            // EORZPgX = 0x55,
+            // EOR_ax = 0x59,
+            // EOR_ay = 0x5d,
 
-            // 0x61 => {}, // ADC_inx_x
-            // 0x65 => {}, // ADC_z_pg 
+            // ADC_inx_x = 0x61, 
+            // ADC_z_pg  = 0x65, 
             ADCImm  = 0x69,
-            // 0x6d => {}, // ADC_abs  
-            // 0x71 => {}, // ADC_ind_y
-            // 0x75 => {}, // ADC_dx   
-            // 0x79 => {}, // ADC_ax   
-            // 0x7d => {}, // ADC_ay   
+            // ADC_abs = 0x6d,
+            // ADC_ind_y = 0x71, 
+            // ADCZPgX = 0x75, 
+            // ADC_ax = 0x79,
+            // ADC_ay = 0x7d,
 
-            // 0xc1 => {}, // CMP_inx_x
-            // 0xc5 => {}, // CMP_z_pg 
+            // CMP_inx_x = 0xc1, 
+            // CMP_z_pg  = 0xc5, 
             CMPImm = 0xc9,
-            // 0xcd => {}, // CMP_abs  
-            // 0xd1 => {}, // CMP_ind_y
-            // 0xd5 => {}, // CMP_dx   
-            // 0xd9 => {}, // CMP_ax   
-            // 0xdd => {}, // CMP_ay   
+            // CMP_abs = 0xcd,
+            // CMP_ind_y = 0xd1, 
+            // CMPZPgX = 0xd5, 
+            // CMP_ax = 0xd9,
+            // CMP_ay = 0xdd,
 
-            // 0xe1 => {}, // SBC_inx_x
-            // 0xe5 => {}, // SBC_z_pg 
+            // SBC_inx_x = 0xe1, 
+            // SBC_z_pg  = 0xe5, 
             SBCImm = 0xe9,
-            // 0xed => {}, // SBC_abs  
-            // 0xf1 => {}, // SBC_ind_y
-            // 0xf5 => {}, // SBC_dx   
-            // 0xf9 => {}, // SBC_ax   
-            // 0xfd => {}, // SBC_ay   
+            // SBC_abs = 0xed,
+            // SBC_ind_y = 0xf1, 
+            // SBCZPgX = 0xf5, 
+            // SBC_ax = 0xf9,
+            // SBC_ay = 0xfd,
 
-            // 0x06 => {}, // ASL_z_pg 
-            // 0x0a => {}, // ASL      
-            // 0x0e => {}, // ASL_abs  
-            // 0x16 => {}, // ASL_dx   
-            // 0x1e => {}, // ASL_ax   
+            // ASL_z_pg  = 0x06, 
+            ASL = 0x0a,
+            // ASL_abs = 0x0e,
+            // ASLZPgX = 0x16, 
+            // ASL_ax = 0x1e,
 
-            // 0x46 => {}, // LSR_z_pg 
+            // LSR_z_pg  = 0x46, 
             LSR = 0x4a,
-            // 0x4e => {}, // LSR_abs  
-            // 0x56 => {}, // LSR_dx   
-            // 0x5e => {}, // LSR_ax   
+            // LSR_abs = 0x4e,
+            // LSRZPgX = 0x56, 
+            // LSR_ax = 0x5e,
 
             // Rotates
-            // 0x26 => {}, // ROL_z_pg 
-            // 0x2a => {}, // ROL      
-            // 0x2e => {}, // ROL_abs  
-            // 0x36 => {}, // ROL_dx   
-            // 0x3e => {}, // ROL_ax   
+            // ROL_z_pg  = 0x26, 
+            ROL = 0x2a,
+            // ROL_abs = 0x2e,
+            // ROLZPgX = 0x36, 
+            // ROL_ax = 0x3e,
 
-            // 0x66 => {}, // ROR_z_pg 
-            // 0x6a => {}, // ROR      
-            // 0x6e => {}, // ROR_abs  
-            // 0x76 => {}, // ROR_dx   
-            // 0x7e => {}, // ROR_ax   
+            // ROR_z_pg  = 0x66, 
+            ROR = 0x6a,
+            // ROR_abs = 0x6e,
+            // RORZPgX = 0x76, 
+            // ROR_ax = 0x7e,
 
             // Increments
             DECZpg = 0xc6,
-            // 0xce => {}, // DEC_abs  
-            // 0xd6 => {}, // DEC_dx   
-            // 0xde => {}, // DEC_ax   
+            // DEC_abs = 0xce,
+            // DECZPgX = 0xd6, 
+            // DEC_ax = 0xde,
 
-            // 0xe6 => {}, // INC_z_pg 
-            // 0xee => {}, // INC_abs  
-            // 0xf6 => {}, // INC_dx   
-            // 0xfe => {, // INC_ax   
+            // INC_z_pg  = 0xe6, 
+            // INC_abs = 0xee,
+            // INCZPgX = 0xf6, 
+            // INC_ax = 0xfe,
 
             // The ever important nop
             // Observe all its majesty
