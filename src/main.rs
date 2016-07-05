@@ -15,6 +15,8 @@ mod instructions;
 
 #[macro_use]
 extern crate enum_primitive;
+#[macro_use]
+extern crate nom;
 extern crate num;
 extern crate byteorder;
 

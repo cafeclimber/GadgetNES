@@ -30,20 +30,6 @@ pub struct Cpu {
     status: u8, // Status register
 }
 
-/*#[derive(Debug)]
-enum AddressingMode {
-    Accumulator,
-    Implied,
-    Immediate,
-    Absolute,
-    ZeroPage,
-    Relative,
-    AbsoluteIndexed(CPURegister),
-    ZeroPageIndexed(CPURegister),
-    IndexedIndirect,
-    IndirectIndexed,
-}*/
-
 #[derive(Debug)]
 enum BranchOn {
     Plus,
@@ -113,18 +99,25 @@ impl Cpu {
     }
 
     fn push_return_addr(&mut self, interconnect: &mut Interconnect) {
-        let addr = (self.read_reg(CPURegister::StackPointer) as u16) + 0x100;
-        interconnect.write_word(addr, self.pc + 2);
-        self.stack_pointer -= 2;
+        let pc = self.pc + 2;
+        let pc_msb = ((pc & 0xff00) >> 8) as u8;
+        let pc_lsb = (pc & 0x00ff) as u8;
+        self.push_byte_stack(interconnect, pc_msb);
+        self.push_byte_stack(interconnect, pc_lsb);
     }
 
     fn pull_return_addr(&mut self, interconnect: &mut Interconnect) -> u16 {
-        self.stack_pointer += 2;
+        self.stack_pointer += 1;
         let addr = self.read_reg(CPURegister::StackPointer) as u16 + 0x100;
-        let ret_addr = interconnect.read_word(addr) + 1;
+        let pc_lsb = interconnect.read_byte(addr) as u16;
+        self.stack_pointer += 1;
+        let addr = self.read_reg(CPURegister::StackPointer) as u16 + 0x100;
+        let pc_msb = (interconnect.read_byte(addr) as u16) << 8;
+        let ret_addr = pc_msb | pc_lsb;
         ret_addr
     }
 
+    // TODO: Superfluous
     fn get_pc(&self) -> u16 {
         self.pc + 0x8000
     }
