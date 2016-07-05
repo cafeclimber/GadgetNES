@@ -71,6 +71,7 @@ impl Cpu {
     pub fn power_up(&mut self) {
         self.status = 0x24;
         self.stack_pointer = 0xfd;
+        self.pc = 0x8000;
     }
 
     fn check_flag(&mut self, flag: u8) -> bool {
@@ -114,12 +115,12 @@ impl Cpu {
         let addr = self.read_reg(CPURegister::StackPointer) as u16 + 0x100;
         let pc_msb = (interconnect.read_byte(addr) as u16) << 8;
         let ret_addr = pc_msb | pc_lsb;
-        ret_addr
+        ret_addr + 1
     }
 
     // TODO: Superfluous
     fn get_pc(&self) -> u16 {
-        self.pc + 0x8000
+        self.pc
     }
 
     fn increment_pc(&mut self, increment_by: u16) {
@@ -157,7 +158,7 @@ impl Cpu {
         let instr = Instruction::from_u8(raw_instr).unwrap_or_else(|| {
             panic!("Unrecognized instruction: {:#x} Last Failure code: (02h): {:x} (03h): {:x}", raw_instr, interconnect.read_byte(0x02), interconnect.read_byte(0x03));
         });
-        println!("{:X} {:?} \t A:{:2X} X:{:2X} Y:{:2X} P:{:2X} SP:{:2X}", self.pc+0x8000, instr, self.a, self.x, self.y, self.status, self.stack_pointer);
+        println!("{:X} {:?} \t A:{:2X} X:{:2X} Y:{:2X} P:{:2X} SP:{:2X}", self.pc, instr, self.a, self.x, self.y, self.status, self.stack_pointer);
         match instr {
             // TODO: Implement unofficial opcodes
 
@@ -290,9 +291,9 @@ impl Cpu {
             // Jumps
             JSRAbs => {self.push_return_addr(interconnect);
                        let addr = interconnect.read_word(self.get_pc() + 1);
-                       self.jmp(addr - 0x8000);},
+                       self.jmp(addr);},
             JMPAbs => {let target_addr = interconnect.read_word(self.get_pc() + 1);
-                       self.jmp(target_addr - 0x8000);},
+                       self.jmp(target_addr);},
             // JMP_ind => {}, 
 
             // RTI     => {}, 
