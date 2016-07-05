@@ -123,7 +123,7 @@ impl Cpu {
         self.pc
     }
 
-    fn increment_pc(&mut self, increment_by: u16) {
+    fn bump_pc(&mut self, increment_by: u16) {
         self.pc += increment_by;
     }
 
@@ -172,15 +172,15 @@ impl Cpu {
                      self.jmp(jmp_addr);}, // BRK*/
 
             // Stack    
-            PHP => {let byte = self.read_reg(CPURegister::Status); self.push_byte_stack(interconnect, byte); self.set_flag(BRK_FLAG); self.increment_pc(1);},
-            PLP => {self.pull_byte_stack(interconnect, CPURegister::Status); self.increment_pc(1);},
-            PHA => {let byte = self.read_reg(CPURegister::A); self.push_byte_stack(interconnect, byte); self.increment_pc(1);},
+            PHP => {let byte = self.read_reg(CPURegister::Status); self.push_byte_stack(interconnect, byte); self.set_flag(BRK_FLAG); self.bump_pc(1);},
+            PLP => {self.pull_byte_stack(interconnect, CPURegister::Status); self.bump_pc(1);},
+            PHA => {let byte = self.read_reg(CPURegister::A); self.push_byte_stack(interconnect, byte); self.bump_pc(1);},
             PLA => {self.pull_byte_stack(interconnect, CPURegister::A);
-                    self.increment_pc(1);
+                    self.bump_pc(1);
                     if self.read_reg(CPURegister::A) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
                     if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};}
-            TXS => {self.transfer(CPURegister::X, CPURegister::StackPointer); self.increment_pc(1);},
-            TSX => {self.transfer(CPURegister::StackPointer, CPURegister::X); self.increment_pc(1);},
+            TXS => {self.transfer(CPURegister::X, CPURegister::StackPointer); self.bump_pc(1);},
+            TSX => {self.transfer(CPURegister::StackPointer, CPURegister::X); self.bump_pc(1);},
 
             // Branch   
             BPL => {self.branch(interconnect, BranchOn::Plus);},
@@ -193,100 +193,123 @@ impl Cpu {
             BEQ => {self.branch(interconnect, BranchOn::Equal);},
 
             // Flag instructions
-            CLC => {self.unset_flag(CARRY_FLAG); self.increment_pc(1);},
-            SEC => {self.set_flag(CARRY_FLAG); self.increment_pc(1);},
+            CLC => {self.unset_flag(CARRY_FLAG); self.bump_pc(1);},
+            SEC => {self.set_flag(CARRY_FLAG); self.bump_pc(1);},
             // CLI => {},
-            SEI => {self.set_flag(IRQ_FLAG); self.increment_pc(1);},
-            CLV => {self.unset_flag(OVERFLOW_FLAG); self.increment_pc(1)},
-            CLD => {self.unset_flag(DECIMAL_FLAG); self.increment_pc(1);},
-            SED => {self.set_flag(DECIMAL_FLAG); self.increment_pc(1);},
+            SEI => {self.set_flag(IRQ_FLAG); self.bump_pc(1);},
+            CLV => {self.unset_flag(OVERFLOW_FLAG); self.bump_pc(1)},
+            CLD => {self.unset_flag(DECIMAL_FLAG); self.bump_pc(1);},
+            SED => {self.set_flag(DECIMAL_FLAG); self.bump_pc(1);},
 
             // Register instructions
-            DEY => {self.decrement(CPURegister::Y); self.increment_pc(1);},
-            DEX => {self.decrement(CPURegister::X); self.increment_pc(1);},
-            INX => {self.increment(CPURegister::X); self.increment_pc(1);},
-            INY => {self.increment(CPURegister::Y); self.increment_pc(1);},
-            TAX => {self.transfer(CPURegister::A, CPURegister::X); self.increment_pc(1);},
-            TXA => {self.transfer(CPURegister::X, CPURegister::A); self.increment_pc(1);},
-            TAY => {self.transfer(CPURegister::A, CPURegister::Y); self.increment_pc(1);},
-            TYA => {self.transfer(CPURegister::Y, CPURegister::A); self.increment_pc(1);},
+            DEY => {let mut val = self.read_reg(CPURegister::Y);
+                    val = self.decrement(val);
+                    self.write_to_reg(CPURegister::Y, val);
+                    self.bump_pc(1);},
+            DEX => {let mut val = self.read_reg(CPURegister::X);
+                    val = self.decrement(val);
+                    self.write_to_reg(CPURegister::X, val);
+                    self.bump_pc(1);},
+            INX => {let mut val = self.read_reg(CPURegister::X);
+                    val = self.increment(val);
+                    self.write_to_reg(CPURegister::X, val);
+                    self.bump_pc(1);},
+            INY => {let mut val = self.read_reg(CPURegister::Y);
+                    val = self.increment(val);
+                    self.write_to_reg(CPURegister::Y, val);
+                    self.bump_pc(1);},
+            TAX => {self.transfer(CPURegister::A, CPURegister::X); self.bump_pc(1);},
+            TXA => {self.transfer(CPURegister::X, CPURegister::A); self.bump_pc(1);},
+            TAY => {self.transfer(CPURegister::A, CPURegister::Y); self.bump_pc(1);},
+            TYA => {self.transfer(CPURegister::Y, CPURegister::A); self.bump_pc(1);},
 
             // Compares
-            CPYImm => {let val = self.immediate(interconnect); self.compare(CPURegister::Y, val); self.increment_pc(2);}, 
-            // CPY_z_pg=> {}, 
+            CPYImm => {let val = self.immediate(interconnect); self.compare(CPURegister::Y, val); self.bump_pc(2);}, 
+            CPYZPg=> {let val = self.zero_page(interconnect); self.compare(CPURegister::Y, val); self.bump_pc(2);}, 
             // CPY_abs => {}, 
-            CPXImm => {let val = self.immediate(interconnect); self.compare(CPURegister::X, val); self.increment_pc(2);}, 
-            // CPX_z_pg=> {}, 
+            CPXImm => {let val = self.immediate(interconnect); self.compare(CPURegister::X, val); self.bump_pc(2);}, 
+            CPXZPg=> {let val = self.zero_page(interconnect); self.compare(CPURegister::X, val); self.bump_pc(2);}, 
             // CPX_abs => {}, 
 
             // Loads
             LDAInxX=> {let val = self.indexed_indirect(interconnect);
                        self.load(CPURegister::A, val);
-                       self.increment_pc(2);}, 
+                       self.bump_pc(2);}, 
             LDAZpg => {let val = self.zero_page(interconnect);
                        self.load(CPURegister::A, val);
-                       self.increment_pc(2);}, 
+                       self.bump_pc(2);}, 
             LDAImm => {let val = self.immediate(interconnect);
                        self.load(CPURegister::A, val);
-                       self.increment_pc(2);}, 
+                       self.bump_pc(2);}, 
             LDAAbs => {let val = self.absolute(interconnect);
                        self.load(CPURegister::A, val);
-                       self.increment_pc(3);}, 
+                       self.bump_pc(3);}, 
             LDAIndY => {let val = self.indirect_indexed(interconnect);
                         self.load(CPURegister::A, val);
-                        self.increment_pc(2);}, 
+                        self.bump_pc(2);}, 
             // LDA_dx   => {}, 
             // LDA_ax   => {}, 
             // LDA_ay   => {}, 
 
             LDXImm => {let val = self.immediate(interconnect);
                        self.load(CPURegister::X, val);
-                       self.increment_pc(2);},
+                       self.bump_pc(2);},
             LDXZpg => {let val = self.zero_page(interconnect);
                        self.load(CPURegister::X, val);
-                       self.increment_pc(2);},
+                       self.bump_pc(2);},
             LDXAbs => {let val = self.absolute(interconnect);
                        self.load(CPURegister::X, val);
-                       self.increment_pc(3);}, 
+                       self.bump_pc(3);}, 
             // LDX_dy  => {}, 
             // LDX_ay  => {}, 
 
             LDYImm => {let val = self.immediate(interconnect);
                        self.load(CPURegister::Y, val);
-                       self.increment_pc(2);},
-            // LDY_z_pg=> {}, 
+                       self.bump_pc(2);},
+            LDYZPg=> {let val = self.zero_page(interconnect);
+                       self.load(CPURegister::Y, val);
+                       self.bump_pc(2);}, 
             // LDY_abs => {}, 
             // LDY_dx  => {}, 
             // LDY_ax  => {}, 
 
             // Stores
-            // STA_inx_=> {}, 
+            // PRETTIFYME: This is gross. Abstract, pls
+            STAInxX => {let addr = interconnect.read_byte(self.get_pc() + 1);
+                        let sum_addr = addr + self.read_reg(CPURegister::X);
+                        let full_addr = if sum_addr == 0xff {
+                            (interconnect.read_byte(sum_addr as u16) as u16) |
+                            ((interconnect.read_byte(0x0000) as u16) << 8)
+                        } else {
+                            interconnect.read_word(sum_addr as u16)
+                        };
+                        self.store(interconnect, full_addr, CPURegister::A);
+                        self.bump_pc(2);}, 
             STAZpg => {let addr = interconnect.read_byte(self.get_pc() + 1);
                        self.store(interconnect, addr as u16, CPURegister::A);
-                       self.increment_pc(2);},
+                       self.bump_pc(2);},
             STAAbs => {let addr = interconnect.read_word(self.get_pc() + 1);
                        self.store(interconnect, addr, CPURegister::A);
-                       self.increment_pc(3);},
-            STAIndY => {let addr = interconnect.read_byte(self.get_pc() + 1);
+                       self.bump_pc(3);},
+            /*STAIndY => {let addr = interconnect.read_byte(self.get_pc() + 1);
                         let sum_addr = addr + self.read_reg(CPURegister::X);
                         let addr = interconnect.read_word(sum_addr as u16);
                         self.store(interconnect, addr, CPURegister::A);
-                        self.increment_pc(2);},
+                        self.bump_pc(2);},*/
             // STA_dx  => {}, 
             // STA_ax  => {}, 
             // STA_ay  => {}, 
 
             STXZpg => {let addr = interconnect.read_byte(self.get_pc() + 1);
                        self.store(interconnect, addr as u16, CPURegister::X);
-                       self.increment_pc(2);},
+                       self.bump_pc(2);},
             STXAbs => {let addr = interconnect.read_word(self.get_pc() + 1);
                        self.store(interconnect, addr, CPURegister::X);
-                       self.increment_pc(3);},
+                       self.bump_pc(3);},
             // STX_dy => {}, 
-            STYZpg => {let temp_addr = interconnect.read_byte(self.get_pc() + 1);
-                       let addr = interconnect.read_word(temp_addr as u16);
-                       self.store(interconnect, addr, CPURegister::Y);
-                       self.increment_pc(2);},
+            STYZpg => {let addr = interconnect.read_byte(self.get_pc() + 1);
+                       self.store(interconnect, addr as u16, CPURegister::Y);
+                       self.bump_pc(2);},
             // STY_abs => {}, 
             // STY_dx  => {}, 
 
@@ -304,119 +327,143 @@ impl Cpu {
             RTS => {let ret_addr = self.pull_return_addr(interconnect); self.jmp(ret_addr);},
 
             // Bit tests
-            BITZpg => {let val = self.zero_page(interconnect); self.bit(val); self.increment_pc(2);},
+            BITZpg => {let val = self.zero_page(interconnect); self.bit(val); self.bump_pc(2);},
             // BIT_abs => {}, 
 
             // ALU operations
-            // ORA_inx_=> {}, 
-            // ORA_z_pg=> {}, 
-            ORAImm => {let imm = self.immediate(interconnect); self.ora(imm); self.increment_pc(2);},
+            ORAInxX => {let val = self.indexed_indirect(interconnect); self.ora(val); self.bump_pc(2);}, 
+            ORAZPg=> {let val = self.zero_page(interconnect); self.ora(val); self.bump_pc(2);}, 
+            ORAImm => {let imm = self.immediate(interconnect); self.ora(imm); self.bump_pc(2);},
             // ORA_abs => {}, 
             // ORA_ind_=> {}, 
             // ORA_dx  => {}, 
             // ORA_ax  => {}, 
             // ORA_ay  => {}, 
 
-            // AND_inx_=> {}, 
-            // AND_z_pg=> {}, 
-            ANDImm => {let val = self.immediate(interconnect); self.and(val); self.increment_pc(2);},
+            ANDInxX => {let val = self.indexed_indirect(interconnect); self.and(val); self.bump_pc(2);}, 
+            ANDZPg=> {let val = self.zero_page(interconnect); self.and(val); self.bump_pc(2);}, 
+            ANDImm => {let val = self.immediate(interconnect); self.and(val); self.bump_pc(2);},
             // AND_abs => {}, 
             // AND_ind_=> {}, 
-            ANDZPgX  => {let val = self.z_page_indexed(interconnect, CPURegister::X); self.and(val); self.increment_pc(2);}, 
+            ANDZPgX  => {let val = self.z_page_indexed(interconnect, CPURegister::X); self.and(val); self.bump_pc(2);}, 
             // AND_ax  => {}, 
             // AND_ay  => {}, 
 
-            // EOR_inx_=> {}, 
-            // EOR_z_pg=> {}, 
-            EORImm => {let val = self.immediate(interconnect); self.eor(val); self.increment_pc(2);}, 
+            EORInxX => {let val = self.indexed_indirect(interconnect); self.eor(val); self.bump_pc(2);}, 
+            EORZPg=> {let val = self.zero_page(interconnect); self.eor(val); self.bump_pc(2);}, 
+            EORImm => {let val = self.immediate(interconnect); self.eor(val); self.bump_pc(2);}, 
             // EOR_abs => {}, 
             // EOR_ind_=> {}, 
             // EOR_dx  => {}, 
             // EOR_ax  => {}, 
             // EOR_ay  => {}, 
 
-            // ADC_inx_=> {}, 
-            // ADC_z_pg=> {}, 
-            ADCImm => {let val = self.immediate(interconnect); self.add(val); self.increment_pc(2);},
+            ADCInxX => {let val = self.indexed_indirect(interconnect); self.add(val); self.bump_pc(2);}, 
+            ADCZPg=> {let val = self.zero_page(interconnect); self.add(val); self.bump_pc(2);}, 
+            ADCImm => {let val = self.immediate(interconnect); self.add(val); self.bump_pc(2);},
             // ADC_abs => {}, 
             // ADC_ind_=> {}, 
             // ADC_dx  => {}, 
             // ADC_ax  => {}, 
             // ADC_ay  => {}, 
 
-            // CMP_inx_=> {}, 
-            // CMP_z_pg=> {}, 
-            CMPImm => {let val = self.immediate(interconnect); self.compare(CPURegister::A, val); self.increment_pc(2);}, 
+            CMPInxX => {let val = self.indexed_indirect(interconnect); self.compare(CPURegister::A, val); self.bump_pc(2);},
+            CMPZPg=> {let val = self.zero_page(interconnect); self.compare(CPURegister::A, val); self.bump_pc(2);}, 
+            CMPImm => {let val = self.immediate(interconnect); self.compare(CPURegister::A, val); self.bump_pc(2);}, 
             // CMP_abs => {}, 
             // CMP_ind_=> {}, 
             // CMP_dx  => {}, 
             // CMP_ax  => {}, 
             // CMP_ay  => {}, 
 
-            // SBC_inx_=> {}, 
-            // SBC_z_pg=> {}, 
-            SBCImm => {let val = self.immediate(interconnect); self.sub(val); self.increment_pc(2);}, 
+            SBCInxX=> {let val = self.indexed_indirect(interconnect); self.sub(val); self.bump_pc(2);}, 
+            SBCZPg=> {let val = self.zero_page(interconnect); self.sub(val); self.bump_pc(2);}, 
+            SBCImm => {let val = self.immediate(interconnect); self.sub(val); self.bump_pc(2);}, 
             // SBC_abs => {}, 
             // SBC_ind_=> {}, 
             // SBC_dx  => {}, 
             // SBC_ax  => {}, 
             // SBC_ay  => {}, 
                  
-            // ASL_z_pg=> {}, 
+            ASLZPg=> {let mut addr = self.get_pc() + 1;
+                      addr = interconnect.read_byte(addr) as u16;
+                      let val = self.zero_page(interconnect);
+                      let eval = self.asl(val);
+                      interconnect.write_byte(addr, eval);
+                      self.bump_pc(2);}, 
             ASL     => {let val = self.read_reg(CPURegister::A);
                         let eval = self.asl(val);
                         self.write_to_reg(CPURegister::A, eval);
-                        self.increment_pc(1);}, 
+                        self.bump_pc(1);}, 
             // ASL_abs => {}, 
             // ASL_dx  => {}, 
             // ASL_ax  => {}, 
 
-            // LSR_z_pg=> {}, 
+            LSRZPg=> {let mut addr = self.get_pc() + 1;
+                      addr = interconnect.read_byte(addr) as u16;
+                      let val = self.zero_page(interconnect);
+                      let eval = self.lsr(val);
+                      interconnect.write_byte(addr, eval);
+                      self.bump_pc(2);}, 
             LSR     => {let val = self.read_reg(CPURegister::A);
                         let eval = self.lsr(val);
                         self.write_to_reg(CPURegister::A, eval);
-                        self.increment_pc(1);}, 
+                        self.bump_pc(1);}, 
             // LSR_abs => {}, 
             // LSR_dx  => {}, 
             // LSR_ax  => {}, 
 
             // Rotates
-            // ROL_z_pg=> {}, 
+            ROLZPg=> {let mut addr = self.get_pc() + 1;
+                      addr = interconnect.read_byte(addr) as u16;
+                      let val = self.zero_page(interconnect);
+                      let eval = self.rol(val);
+                      interconnect.write_byte(addr, eval);
+                      self.bump_pc(2);},
             ROL     => {let val = self.read_reg(CPURegister::A);
                         let eval = self.rol(val);
                         self.write_to_reg(CPURegister::A, eval);
-                        self.increment_pc(1);}, 
+                        self.bump_pc(1);}, 
             // ROL_abs => {}, 
             // ROL_dx  => {}, 
             // ROL_ax  => {}, 
 
-            // ROR_z_pg=> {}, 
+            RORZPg=> {let mut addr = self.get_pc() + 1;
+                      addr = interconnect.read_byte(addr) as u16;
+                      let val = self.zero_page(interconnect);
+                      let eval = self.ror(val);
+                      interconnect.write_byte(addr, eval);
+                      self.bump_pc(2);}, 
             ROR     => {let val = self.read_reg(CPURegister::A);
                         let eval = self.ror(val);
                         self.write_to_reg(CPURegister::A, eval);
-                        self.increment_pc(1);}, 
+                        self.bump_pc(1);}, 
             // ROR_abs => {}, 
             // ROR_dx  => {}, 
             // ROR_ax  => {}, 
 
             // Increments
             DECZpg => {let addr = interconnect.read_byte(self.get_pc() + 1);
-                     let val = interconnect.read_byte(addr as u16);
-                     val.wrapping_sub(1);
-                     interconnect.write_byte(addr as u16, val);
-                     self.increment_pc(2);},
+                       let val = interconnect.read_byte(addr as u16);
+                       val.wrapping_sub(1);
+                       interconnect.write_byte(addr as u16, val);
+                       self.bump_pc(2);},
             // DEC_abs => {}, 
             // DEC_dx  => {}, 
             // DEC_ax  => {}, 
 
-            // INC_z_pg=> {}, 
+            INCZPg=> {let addr = interconnect.read_byte(self.get_pc() + 1);
+                       let val = interconnect.read_byte(addr as u16);
+                       val.wrapping_add(1);
+                       interconnect.write_byte(addr as u16, val);
+                       self.bump_pc(2);}, 
             // INC_abs => {}, 
             // INC_dx  => {}, 
             // INC_ax  => {}, 
 
             // The ever important nop
             // Observe all its majesty
-            NOP => {self.increment_pc(1);},
+            NOP => {self.bump_pc(1);},
         }
     }
 
@@ -512,7 +559,7 @@ impl Cpu {
             BranchOn::NotEqual => {!self.check_flag(ZERO_FLAG)},
             BranchOn::Equal => {self.check_flag(ZERO_FLAG)},
         };
-        if branch {self.pc = ((pc as i32) + (branch_target as i32)) as u16} else {self.increment_pc(2);}
+        if branch {self.pc = ((pc as i32) + (branch_target as i32)) as u16} else {self.bump_pc(2);}
     }
 
     // FIXME: This works...well enough
@@ -534,11 +581,11 @@ impl Cpu {
         }
     }
 
-    fn decrement(&mut self, register: CPURegister) {
-        let arg = self.read_reg(register);
-        self.write_to_reg(register, arg.wrapping_sub(1));
-        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
-        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+    fn decrement(&mut self, arg: u8) -> u8 {
+        let eval = arg.wrapping_sub(1);
+        if eval & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if eval == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+        eval
     }
 
     fn eor(&mut self, arg: u8) {
@@ -548,11 +595,11 @@ impl Cpu {
         if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
     }
 
-    fn increment(&mut self, register: CPURegister) {
-        let arg = self.read_reg(register);
-        self.write_to_reg(register, arg.wrapping_add(1));
-        if self.read_reg(register) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
-        if self.read_reg(register) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+    fn increment(&mut self, arg: u8) -> u8 {
+        let eval = arg.wrapping_add(1);
+        if eval & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+        if eval == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+        eval
     }
 
     fn jmp(&mut self, jump_target: u16) {
