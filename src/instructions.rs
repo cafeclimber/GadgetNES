@@ -9,7 +9,7 @@ enum_from_primitive!{
             PHA = 0x48,
             PLA = 0x68,
             TXS = 0x9a,
-            // 0xba => {}, // TSX       
+            TSX = 0xba,
 
             // Branch   
             BPL = 0x10,
@@ -37,8 +37,8 @@ enum_from_primitive!{
             INY = 0xc8,
             TAX = 0xaa,
             TXA = 0x8a,
-            // 0xa8 => {}, // TAY       
-            // 0x98 => {}, // TYA       
+            TAY = 0xa8,
+            TYA = 0x98,
 
             // Compares
             CPYImm = 0xc0,
@@ -60,7 +60,7 @@ enum_from_primitive!{
 
             LDXImm = 0xa2,
             LDXZpg = 0xa6,
-            // 0xae => {}, // LDX_abs  
+            LDXAbs = 0xae,
             // 0xb6 => {}, // LDX_dy   
             // 0xbe => {}, // LDX_ay   
 
@@ -161,7 +161,7 @@ enum_from_primitive!{
             // 0x1e => {}, // ASL_ax   
 
             // 0x46 => {}, // LSR_z_pg 
-            // 0x4a => {}, // LSR      
+            LSR = 0x4a,
             // 0x4e => {}, // LSR_abs  
             // 0x56 => {}, // LSR_dx   
             // 0x5e => {}, // LSR_ax   

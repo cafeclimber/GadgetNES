@@ -56,12 +56,11 @@ enum BranchOn {
     Equal,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum CPURegister {
     A,
     X,
     Y,
-    Pc,
     StackPointer,
     Status,
 }
@@ -101,27 +100,27 @@ impl Cpu {
     }
 
     fn push_byte_stack(&mut self, interconnect: &mut Interconnect, value: u8) {
-        let addr = self.read_reg(CPURegister::StackPointer) as u16 | 0x100;
+        let addr = self.read_reg(CPURegister::StackPointer) as u16 + 0x100;
         interconnect.write_byte(addr, value);
         self.stack_pointer -= 1;
     }
 
     fn pull_byte_stack(&mut self, interconnect: &Interconnect, register: CPURegister) {
         self.stack_pointer += 1;
-        let addr = self.read_reg(CPURegister::StackPointer) as u16 | 0x100;
+        let addr = self.read_reg(CPURegister::StackPointer) as u16 + 0x100;
         self.write_to_reg(register, interconnect.read_byte(addr));
         self.set_flag(STACK_COPY);
     }
 
     fn push_return_addr(&mut self, interconnect: &mut Interconnect) {
-        let addr = (self.read_reg(CPURegister::StackPointer) as u16) | 0x100;
+        let addr = (self.read_reg(CPURegister::StackPointer) as u16) + 0x100;
         interconnect.write_word(addr, self.pc + 2);
         self.stack_pointer -= 2;
     }
 
     fn pull_return_addr(&mut self, interconnect: &mut Interconnect) -> u16 {
         self.stack_pointer += 2;
-        let addr = self.read_reg(CPURegister::StackPointer) as u16 | 0x100;
+        let addr = self.read_reg(CPURegister::StackPointer) as u16 + 0x100;
         let ret_addr = interconnect.read_word(addr) + 1;
         ret_addr
     }
@@ -141,7 +140,6 @@ impl Cpu {
             CPURegister::Y => self.y,
             CPURegister::StackPointer => self.stack_pointer,
             CPURegister::Status => self.status,
-            _ => panic!("Attemped to interact with special register: {:?}. Use specific helper methods instead", register),
         }
     }
 
@@ -152,7 +150,6 @@ impl Cpu {
             CPURegister::Y => {self.y = val},
             CPURegister::StackPointer => {self.stack_pointer = val},
             CPURegister::Status => {self.status = val},
-            _ => panic!{"Attempt to write to unsupported register: {:?}", register},
         }
     }
 
@@ -165,7 +162,7 @@ impl Cpu {
         use instructions::Instruction::*;
         let raw_instr = interconnect.read_byte(self.get_pc());
         let instr = Instruction::from_u8(raw_instr).unwrap_or_else(|| {
-            panic!("Unrecognized instruction: {:#x}", raw_instr);
+            panic!("Unrecognized instruction: {:#x} Last Failure code: (02h): {:x} (03h): {:x}", raw_instr, interconnect.read_byte(0x02), interconnect.read_byte(0x03));
         });
         println!("{:X} {:?} \t A:{:2X} X:{:2X} Y:{:2X} P:{:2X} SP:{:2X}", self.pc+0x8000, instr, self.a, self.x, self.y, self.status, self.stack_pointer);
         match instr {
@@ -187,9 +184,9 @@ impl Cpu {
             PLA => {self.pull_byte_stack(interconnect, CPURegister::A);
                     self.increment_pc(1);
                     if self.read_reg(CPURegister::A) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
-                    if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};},
+                    if self.read_reg(CPURegister::A) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};}
             TXS => {self.transfer(CPURegister::X, CPURegister::StackPointer); self.increment_pc(1);},
-            // TSX => {},
+            TSX => {self.transfer(CPURegister::StackPointer, CPURegister::X); self.increment_pc(1);},
 
             // Branch   
             BPL => {self.branch(interconnect, BranchOn::Plus);},
@@ -217,8 +214,8 @@ impl Cpu {
             INY => {self.increment(CPURegister::Y); self.increment_pc(1);},
             TAX => {self.transfer(CPURegister::A, CPURegister::X); self.increment_pc(1);},
             TXA => {self.transfer(CPURegister::X, CPURegister::A); self.increment_pc(1);},
-            // TAY => {},
-            // TYA => {},
+            TAY => {self.transfer(CPURegister::A, CPURegister::Y); self.increment_pc(1);},
+            TYA => {self.transfer(CPURegister::Y, CPURegister::A); self.increment_pc(1);},
 
             // Compares
             CPYImm => {let val = self.immediate(interconnect); self.compare(CPURegister::Y, val); self.increment_pc(2);}, 
@@ -231,34 +228,36 @@ impl Cpu {
             // Loads
             // LDA_inx_x=> {}, 
             LDAZpg => {let val = self.zero_page(interconnect);
-                     self.load(CPURegister::A, val);
-                     self.increment_pc(2);}, 
+                       self.load(CPURegister::A, val);
+                       self.increment_pc(2);}, 
             LDAImm => {let val = self.immediate(interconnect);
-                     self.load(CPURegister::A, val);
-                     self.increment_pc(2);}, 
+                       self.load(CPURegister::A, val);
+                       self.increment_pc(2);}, 
             LDAAbs => {let val = self.absolute(interconnect);
-                     self.load(CPURegister::A, val);
-                     self.increment_pc(3);}, 
+                       self.load(CPURegister::A, val);
+                       self.increment_pc(3);}, 
             LDAIndY => {let val = self.indirect_indexed(interconnect);
-                     self.load(CPURegister::A, val);
-                     self.increment_pc(2);}, 
+                        self.load(CPURegister::A, val);
+                        self.increment_pc(2);}, 
             // LDA_dx   => {}, 
             // LDA_ax   => {}, 
             // LDA_ay   => {}, 
 
             LDXImm => {let val = self.immediate(interconnect);
-                     self.load(CPURegister::X, val);
-                     self.increment_pc(2);},
+                       self.load(CPURegister::X, val);
+                       self.increment_pc(2);},
             LDXZpg => {let val = self.zero_page(interconnect);
-                     self.load(CPURegister::X, val);
-                     self.increment_pc(2);},
-            // LDX_abs => {}, 
+                       self.load(CPURegister::X, val);
+                       self.increment_pc(2);},
+            LDXAbs => {let val = self.absolute(interconnect);
+                       self.load(CPURegister::X, val);
+                       self.increment_pc(3);}, 
             // LDX_dy  => {}, 
             // LDX_ay  => {}, 
 
             LDYImm => {let val = self.immediate(interconnect);
-                     self.load(CPURegister::Y, val);
-                     self.increment_pc(2);},
+                       self.load(CPURegister::Y, val);
+                       self.increment_pc(2);},
             // LDY_z_pg=> {}, 
             // LDY_abs => {}, 
             // LDY_dx  => {}, 
@@ -372,7 +371,7 @@ impl Cpu {
             // ASL_ax  => {}, 
 
             // LSR_z_pg=> {}, 
-            // LSR     => {}, 
+            LSR     => {let val = self.read_reg(CPURegister::A) >> 1; self.write_to_reg(CPURegister::A, val); self.increment_pc(1);}, 
             // LSR_abs => {}, 
             // LSR_dx  => {}, 
             // LSR_ax  => {}, 
@@ -477,7 +476,7 @@ impl Cpu {
     }
 
     fn branch(&mut self, interconnect: &Interconnect, branch_on: BranchOn) {
-        let branch_target = interconnect.read_byte(self.get_pc() + 1);
+        let branch_target = interconnect.read_byte(self.get_pc() + 1) as i8;
         let pc = self.pc + 2;
         let branch = match branch_on {
             BranchOn::Plus => {!self.check_flag(NEGATIVE_FLAG)},
@@ -552,8 +551,10 @@ impl Cpu {
     fn transfer(&mut self, from_reg: CPURegister, to_reg: CPURegister) {
         let val = self.read_reg(from_reg);
         self.write_to_reg(to_reg, val);
-        if self.read_reg(to_reg) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
-        if self.read_reg(to_reg) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+        if to_reg != CPURegister::StackPointer {
+            if self.read_reg(to_reg) & 0b1000_0000 != 0 {self.set_flag(NEGATIVE_FLAG);} else {self.unset_flag(NEGATIVE_FLAG);};
+            if self.read_reg(to_reg) == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+        }
     }
 
     fn store(&mut self, interconnect: &mut Interconnect, addr: u16, register: CPURegister) {

@@ -4,7 +4,7 @@ use super::mapper::*;
 use super::cart::Cartridge;
 
 pub struct Interconnect {
-    ram: Box<[u8]>,
+    pub ram: Box<[u8]>,
     apu: Apu,
     ppu: Ppu,
     cart: Cartridge,
