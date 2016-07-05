@@ -446,11 +446,17 @@ impl Cpu {
         interconnect.read_byte(sum_addr as u16)
     }
 
+    // PRETTIFYME
     fn indexed_indirect(&self, interconnect: &Interconnect) -> u8 {
         let addr = interconnect.read_byte(self.get_pc() + 1);
-        let sum_addr = addr + (self.read_reg(CPURegister::X));
-        let addr = interconnect.read_word(sum_addr as u16);
-        interconnect.read_byte(addr as u16)
+        let sum_addr = addr.wrapping_add((self.read_reg(CPURegister::X))) as u16;
+        if sum_addr == 0xff {
+            let fetch_addr = (interconnect.read_byte(sum_addr as u16) as u16) | ((interconnect.read_byte(0x0000) as u16) << 8);
+            interconnect.read_byte(fetch_addr)
+        } else {
+            let fetch_addr = interconnect.read_word(sum_addr as u16);
+            interconnect.read_byte(fetch_addr)
+        }
     }
 
     fn indirect_indexed(&self, interconnect: &Interconnect) -> u8 {
