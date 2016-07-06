@@ -1,4 +1,4 @@
-GalvaNES
+GadgetNES
 ========
 Writing my first emulator in Rust!
 
