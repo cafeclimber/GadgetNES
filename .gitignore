@@ -9,3 +9,4 @@ Cargo.lock
 # Exclude rom files used for testing. These will be listed in documentation
 /roms/
 /nes-disasm/
+*.log
