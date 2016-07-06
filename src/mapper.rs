@@ -72,7 +72,7 @@ impl Mapper for Mapper0 {
     }
 
     fn load_rom(&mut self, rom: Vec<u8>) {
-        self.prg_rom = rom[16..16392].to_owned();
+        self.prg_rom = rom[16..16400].to_owned();
         self.chr = rom[16392..].to_owned();
     }
 }
