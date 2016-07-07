@@ -30,7 +30,7 @@ pub struct Cpu {
     status: u8, // Status register
 }
 
-#[derive(Debug)]
+/*#[derive(Debug)]
 enum AddressingMode {
     Accumulator,
     Implied,
@@ -42,7 +42,7 @@ enum AddressingMode {
     ZeroPageIndexed,
     IndexedIndirect,
     IndirectIndexed,
-}
+}*/
 
 #[derive(Debug)]
 enum BranchOn {
@@ -171,18 +171,18 @@ impl Cpu {
         let instr = Instruction::from_u8(raw_instr).unwrap_or_else(|| {
             panic!("Unrecognized instruction: {:#x} Last Failure code: (02h): {:x} (03h): {:x}", raw_instr, interconnect.read_byte(0x02), interconnect.read_byte(0x03));
         });
-        println!("{:X} {:?} \t A:{:2X} X:{:2X} Y:{:2X} P:{:2X} SP:{:2X}", self.pc, instr, self.a, self.x, self.y, self.status, self.stack_pointer);
+        println!("{:04X} {:?} \t A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}", self.pc, instr, self.a, self.x, self.y, self.status, self.stack_pointer);
         match instr {
             // TODO: Implement unofficial opcodes
 
-            // FIXME: ...wat
-            /*BRK => {let ret_addr = self.get_pc();
-                     self.push_return_addr(interconnect, ret_addr);
-                     let flags = self.read_reg(CPURegister::StackPointer);
-                     self.push_byte_stack(interconnect, flags);
-                     self.set_flag(IRQ_FLAG);
-                     let jmp_addr = interconnect.read_word(IRQBRK_VECTOR);
-                     self.jmp(jmp_addr);}, // BRK*/
+            BRK => {self.bump_pc(2);
+                    self.push_return_addr(interconnect);
+                    let status = self.read_reg(CPURegister::Status);
+                    self.set_flag(IRQ_FLAG);
+                    self.push_byte_stack(interconnect, status);
+                    let branch_target = interconnect.read_word(IRQBRK_VECTOR);
+                    self.jmp(branch_target);
+            },
 
             // Stack    
             PHP => {let byte = self.read_reg(CPURegister::Status); self.push_byte_stack(interconnect, byte); self.set_flag(BRK_FLAG); self.bump_pc(1);},
@@ -260,9 +260,15 @@ impl Cpu {
             LDAIndY => {let val = self.indirect_indexed(interconnect);
                         self.load(CPURegister::A, val);
                         self.bump_pc(2);}, 
-            // LDA_dx   => {}, 
-            // LDA_ax   => {}, 
-            // LDA_ay   => {}, 
+            LDAZPgX   => {let val = self.z_page_indexed(interconnect, CPURegister::X);
+                          self.load(CPURegister::A, val);
+                          self.bump_pc(2);}, 
+            LDAAx   => {let val = self.absolute_indexed(interconnect, CPURegister::X);
+                        self.load(CPURegister::A, val);
+                        self.bump_pc(3);}, 
+            LDAAy   => {let val = self.absolute_indexed(interconnect, CPURegister::Y);
+                        self.load(CPURegister::A, val);
+                        self.bump_pc(3);}, 
 
             LDXImm => {let val = self.immediate(interconnect);
                        self.load(CPURegister::X, val);
@@ -273,8 +279,12 @@ impl Cpu {
             LDXAbs => {let val = self.absolute(interconnect);
                        self.load(CPURegister::X, val);
                        self.bump_pc(3);}, 
-            // LDX_dy  => {}, 
-            // LDX_ay  => {}, 
+            LDXZPgY  => {let val = self.z_page_indexed(interconnect, CPURegister::Y);
+                          self.load(CPURegister::X, val);
+                          self.bump_pc(2);}, 
+            LDXAy  => {let val = self.absolute_indexed(interconnect, CPURegister::Y);
+                         self.load(CPURegister::X, val);
+                         self.bump_pc(3);}, 
 
             LDYImm => {let val = self.immediate(interconnect);
                        self.load(CPURegister::Y, val);
@@ -285,8 +295,12 @@ impl Cpu {
             LDYAbs => {let val = self.absolute(interconnect);
                         self.load(CPURegister::Y, val);
                         self.bump_pc(3);}, 
-            // LDY_dx  => {}, 
-            // LDY_ax  => {}, 
+            LDYZPgX  => {let val = self.z_page_indexed(interconnect, CPURegister::X);
+                         self.load(CPURegister::Y, val);
+                         self.bump_pc(2);}, 
+            LDYAx  => {let val = self.absolute_indexed(interconnect, CPURegister::X);
+                         self.load(CPURegister::Y, val);
+                         self.bump_pc(3);}, 
 
             // Stores
             // PRETTIFYME: This is gross. Abstract, pls
@@ -309,9 +323,15 @@ impl Cpu {
             STAIndY => {let addr = self.indirect_indexed_addr(interconnect);
                         self.store(interconnect, addr, CPURegister::A);
                         self.bump_pc(2);},
-            // STA_dx  => {}, 
-            // STA_ax  => {}, 
-            // STA_ay  => {}, 
+            STAZPgX  => {let addr = self.z_page_indexed_addr(interconnect, CPURegister::X);
+                         self.store(interconnect, addr, CPURegister::A);
+                         self.bump_pc(2);}, 
+            STAAx  => {let addr = self.absolute_indexed_addr(interconnect, CPURegister::X);
+                       self.store(interconnect, addr, CPURegister::A);
+                       self.bump_pc(3);},
+            STAAy  => {let addr = self.absolute_indexed_addr(interconnect, CPURegister::Y);
+                       self.store(interconnect, addr, CPURegister::A);
+                       self.bump_pc(3);}, 
 
             STXZpg => {let addr = interconnect.read_byte(self.get_pc() + 1);
                        self.store(interconnect, addr as u16, CPURegister::X);
@@ -319,14 +339,18 @@ impl Cpu {
             STXAbs => {let addr = interconnect.read_word(self.get_pc() + 1);
                        self.store(interconnect, addr, CPURegister::X);
                        self.bump_pc(3);},
-            // STX_dy => {}, 
+            STXZPgY => {let addr = self.z_page_indexed_addr(interconnect, CPURegister::Y);
+                        self.store(interconnect, addr, CPURegister::X);
+                        self.bump_pc(2);}, 
             STYZpg => {let addr = interconnect.read_byte(self.get_pc() + 1);
                        self.store(interconnect, addr as u16, CPURegister::Y);
                        self.bump_pc(2);},
             STYAbs => {let addr = interconnect.read_word(self.get_pc() + 1);
-                        self.store(interconnect, addr as u16, CPURegister::Y);
-                        self.bump_pc(3);}, 
-            // STY_dx  => {}, 
+                       self.store(interconnect, addr as u16, CPURegister::Y);
+                       self.bump_pc(3);}, 
+            STYZPgX => {let addr = self.z_page_indexed_addr(interconnect, CPURegister::X);
+                        self.store(interconnect, addr, CPURegister::Y);
+                        self.bump_pc(2);}, 
 
             // Jumps
             JSRAbs => {self.push_return_addr(interconnect);
@@ -335,8 +359,13 @@ impl Cpu {
             JMPAbs => {let target_addr = interconnect.read_word(self.get_pc() + 1);
                        self.jmp(target_addr);},
             JMPInd => {let addr = interconnect.read_word(self.get_pc() + 1);
-                        let target_addr = interconnect.read_word(addr);
-                        self.jmp(target_addr);}, 
+                       if addr & 0x00ff == 0xff {
+                           let target_addr = interconnect.read_byte(addr) as u16 | ((interconnect.read_byte(addr + 1 - 0x100) as u16) << 8);
+                           self.jmp(target_addr);
+                       } else {
+                           let target_addr = interconnect.read_word(addr);
+                           self.jmp(target_addr);
+                       }}
 
             RTI     => {self.pull_byte_stack(interconnect, CPURegister::Status);
                         let ret_addr = self.pull_return_addr(interconnect) - 1; // TODO: Correct?
@@ -353,9 +382,9 @@ impl Cpu {
             ORAImm => {let imm = self.immediate(interconnect); self.ora(imm); self.bump_pc(2);},
             ORAAbs => {let val = self.absolute(interconnect); self.ora(val); self.bump_pc(3);}, 
             ORAIndY => {let val = self.indirect_indexed(interconnect); self.ora(val); self.bump_pc(2);}, 
-            // ORA_dx  => {}, 
-            // ORA_ax  => {}, 
-            // ORA_ay  => {}, 
+            ORAZPgX  => {let val = self.z_page_indexed(interconnect, CPURegister::X); self.ora(val); self.bump_pc(2);}, 
+            ORAAx  => {let val = self.absolute_indexed(interconnect, CPURegister::X); self.ora(val); self.bump_pc(3);}, 
+            ORAAy  => {let val = self.absolute_indexed(interconnect, CPURegister::Y); self.ora(val); self.bump_pc(3);}, 
 
             ANDInxX => {let val = self.indexed_indirect(interconnect); self.and(val); self.bump_pc(2);}, 
             ANDZPg=> {let val = self.zero_page(interconnect); self.and(val); self.bump_pc(2);}, 
@@ -363,44 +392,44 @@ impl Cpu {
             ANDAbs => {let val = self.absolute(interconnect); self.and(val); self.bump_pc(3);}, 
             ANDIndY => {let val = self.indirect_indexed(interconnect); self.and(val); self.bump_pc(2);}, 
             ANDZPgX  => {let val = self.z_page_indexed(interconnect, CPURegister::X); self.and(val); self.bump_pc(2);}, 
-            // AND_ax  => {}, 
-            // AND_ay  => {}, 
+            ANDAx  => {let val = self.absolute_indexed(interconnect, CPURegister::X); self.and(val); self.bump_pc(3);}, 
+            ANDAy  => {let val = self.absolute_indexed(interconnect, CPURegister::Y); self.and(val); self.bump_pc(3);}, 
 
             EORInxX => {let val = self.indexed_indirect(interconnect); self.eor(val); self.bump_pc(2);}, 
             EORZPg=> {let val = self.zero_page(interconnect); self.eor(val); self.bump_pc(2);}, 
             EORImm => {let val = self.immediate(interconnect); self.eor(val); self.bump_pc(2);}, 
             EORAbs => {let val = self.absolute(interconnect); self.eor(val); self.bump_pc(3);}, 
             EORIndY => {let val = self.indirect_indexed(interconnect); self.eor(val); self.bump_pc(2);}, 
-            // EOR_dx  => {}, 
-            // EOR_ax  => {}, 
-            // EOR_ay  => {}, 
+            EORZPgX  => {let val = self.z_page_indexed(interconnect, CPURegister::X); self.eor(val); self.bump_pc(2);}, 
+            EORAx  => {let val = self.absolute_indexed(interconnect, CPURegister::X); self.eor(val); self.bump_pc(3);}, 
+            EORAy  => {let val = self.absolute_indexed(interconnect, CPURegister::Y); self.eor(val); self.bump_pc(3);}, 
 
             ADCInxX => {let val = self.indexed_indirect(interconnect); self.add(val); self.bump_pc(2);}, 
             ADCZPg=> {let val = self.zero_page(interconnect); self.add(val); self.bump_pc(2);}, 
             ADCImm => {let val = self.immediate(interconnect); self.add(val); self.bump_pc(2);},
             ADCAbs => {let val = self.absolute(interconnect); self.add(val); self.bump_pc(3);}, 
             ADCIndY => {let val = self.indirect_indexed(interconnect); self.add(val); self.bump_pc(2);}, 
-            // ADC_dx  => {}, 
-            // ADC_ax  => {}, 
-            // ADC_ay  => {}, 
+            ADCZPgX  => {let val = self.z_page_indexed(interconnect, CPURegister::X); self.add(val); self.bump_pc(2);}, 
+            ADCAx  => {let val = self.absolute_indexed(interconnect, CPURegister::X); self.add(val); self.bump_pc(3);}, 
+            ADCAy  => {let val = self.absolute_indexed(interconnect, CPURegister::Y); self.add(val); self.bump_pc(3);}, 
 
             CMPInxX => {let val = self.indexed_indirect(interconnect); self.compare(CPURegister::A, val); self.bump_pc(2);},
             CMPZPg=> {let val = self.zero_page(interconnect); self.compare(CPURegister::A, val); self.bump_pc(2);}, 
             CMPImm => {let val = self.immediate(interconnect); self.compare(CPURegister::A, val); self.bump_pc(2);}, 
             CMPAbs => {let val = self.absolute(interconnect); self.compare(CPURegister::A, val); self.bump_pc(3);}, 
             CMPIndY => {let val = self.indirect_indexed(interconnect); self.compare(CPURegister::A, val); self.bump_pc(2);},
-            // CMP_dx  => {}, 
-            // CMP_ax  => {}, 
-            // CMP_ay  => {}, 
+            CMPZPgX  => {let val = self.z_page_indexed(interconnect, CPURegister::X); self.compare(CPURegister::A, val); self.bump_pc(2);}, 
+            CMPAx  => {let val = self.absolute_indexed(interconnect, CPURegister::X); self.compare(CPURegister::A, val); self.bump_pc(3);}, 
+            CMPAy  => {let val = self.absolute_indexed(interconnect, CPURegister::Y); self.compare(CPURegister::A, val); self.bump_pc(3);}, 
 
             SBCInxX=> {let val = self.indexed_indirect(interconnect); self.sub(val); self.bump_pc(2);}, 
             SBCZPg=> {let val = self.zero_page(interconnect); self.sub(val); self.bump_pc(2);}, 
             SBCImm => {let val = self.immediate(interconnect); self.sub(val); self.bump_pc(2);}, 
             SBCAbs => {let val = self.absolute(interconnect); self.sub(val); self.bump_pc(3);}, 
             SBCIndY => {let val = self.indirect_indexed(interconnect); self.sub(val); self.bump_pc(2);}, 
-            // SBC_dx  => {}, 
-            // SBC_ax  => {}, 
-            // SBC_ay  => {}, 
+            SBCZPgX  => {let val = self.z_page_indexed(interconnect, CPURegister::X); self.sub(val); self.bump_pc(2);}, 
+            SBCAx  => {let val = self.absolute_indexed(interconnect, CPURegister::X); self.sub(val); self.bump_pc(3);}, 
+            SBCAy  => {let val = self.absolute_indexed(interconnect, CPURegister::Y); self.sub(val); self.bump_pc(3);}, 
                  
             ASLZPg => {let addr = interconnect.read_byte(self.get_pc() + 1) as u16;
                        let mut val = self.zero_page(interconnect);
@@ -437,8 +466,30 @@ impl Cpu {
                        if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
                        interconnect.write_byte(addr, val);
                        self.bump_pc(3);}, 
-            // ASL_dx  => {}, 
-            // ASL_ax  => {}, 
+            ASLZPgX  => {let addr = self.z_page_indexed_addr(interconnect, CPURegister::X);
+                         let mut val = self.z_page_indexed(interconnect, CPURegister::X);
+                         if val & (1 << 7) != 0 {self.set_flag(CARRY_FLAG);} else {self.unset_flag(CARRY_FLAG);}
+                         val = val << 1;
+                         if val  & 0b1000_0000 != 0 {
+                             self.set_flag(NEGATIVE_FLAG);
+                         } else {
+                             self.unset_flag(NEGATIVE_FLAG);
+                         };
+                         if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                         interconnect.write_byte(addr, val);
+                         self.bump_pc(2);}, 
+            ASLAx  => {let addr = self.absolute_indexed_addr(interconnect, CPURegister::X);
+                       let mut val = self.absolute_indexed(interconnect, CPURegister::X);
+                       if val & (1 << 7) != 0 {self.set_flag(CARRY_FLAG);} else {self.unset_flag(CARRY_FLAG);}
+                       val = val << 1;
+                       if val  & 0b1000_0000 != 0 {
+                           self.set_flag(NEGATIVE_FLAG);
+                       } else {
+                           self.unset_flag(NEGATIVE_FLAG);
+                       };
+                       if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                       interconnect.write_byte(addr, val);
+                       self.bump_pc(3);}, 
 
             LSRZPg => {let addr = interconnect.read_byte(self.get_pc() + 1) as u16;
                        let mut val = self.zero_page(interconnect);
@@ -475,8 +526,30 @@ impl Cpu {
                        if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
                        interconnect.write_byte(addr, val);
                        self.bump_pc(3);}, 
-            // LSR_dx  => {}, 
-            // LSR_ax  => {}, 
+            LSRZPgX  => {let addr = self.z_page_indexed_addr(interconnect, CPURegister::X);
+                         let mut val = self.z_page_indexed(interconnect, CPURegister::X);
+                         if val & (1 << 0) != 0 {self.set_flag(CARRY_FLAG);} else {self.unset_flag(CARRY_FLAG);}
+                         val = val >> 1;
+                         if val  & 0b1000_0000 != 0 {
+                             self.set_flag(NEGATIVE_FLAG);
+                         } else {
+                             self.unset_flag(NEGATIVE_FLAG);
+                         };
+                         if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                         interconnect.write_byte(addr, val);
+                         self.bump_pc(2);}, 
+            LSRAx  => {let addr = self.absolute_indexed_addr(interconnect, CPURegister::X);
+                         let mut val = self.absolute_indexed(interconnect, CPURegister::X);
+                         if val & (1 << 0) != 0 {self.set_flag(CARRY_FLAG);} else {self.unset_flag(CARRY_FLAG);}
+                         val = val >> 1;
+                         if val  & 0b1000_0000 != 0 {
+                             self.set_flag(NEGATIVE_FLAG);
+                         } else {
+                             self.unset_flag(NEGATIVE_FLAG);
+                         };
+                         if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                         interconnect.write_byte(addr, val);
+                         self.bump_pc(3);}, 
 
             // Rotates
             ROLZPg=> {let addr = interconnect.read_byte(self.get_pc() + 1) as u16;
@@ -517,8 +590,32 @@ impl Cpu {
                       if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
                       interconnect.write_byte(addr, val);
                       self.bump_pc(3);}, 
-            // ROL_dx  => {}, 
-            // ROL_ax  => {}, 
+            ROLZPgX  => {let addr = self.z_page_indexed_addr(interconnect, CPURegister::X);
+                         let mut val = self.z_page_indexed(interconnect, CPURegister::X);
+                         let carry = if self.check_flag(CARRY_FLAG) {1} else {0};
+                         if val & (1 << 7) != 0 {self.set_flag(CARRY_FLAG);} else {self.unset_flag(CARRY_FLAG);}
+                         val = (val << 1) | carry;
+                         if val  & 0b1000_0000 != 0 {
+                          self.set_flag(NEGATIVE_FLAG);
+                         } else {
+                             self.unset_flag(NEGATIVE_FLAG);
+                         };
+                         if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                         interconnect.write_byte(addr, val);
+                         self.bump_pc(2);}, 
+            ROLAx  => {let addr = self.absolute_indexed_addr(interconnect, CPURegister::X);
+                       let mut val = self.absolute_indexed(interconnect, CPURegister::X);
+                       let carry = if self.check_flag(CARRY_FLAG) {1} else {0};
+                       if val & (1 << 7) != 0 {self.set_flag(CARRY_FLAG);} else {self.unset_flag(CARRY_FLAG);}
+                       val = (val << 1) | carry;
+                       if val  & 0b1000_0000 != 0 {
+                           self.set_flag(NEGATIVE_FLAG);
+                       } else {
+                           self.unset_flag(NEGATIVE_FLAG);
+                       };
+                       if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                       interconnect.write_byte(addr, val);
+                       self.bump_pc(3);}, 
 
             RORZPg=> {let addr = interconnect.read_byte(self.get_pc() + 1) as u16;
                       let mut val = self.zero_page(interconnect);
@@ -558,8 +655,32 @@ impl Cpu {
                        if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
                        interconnect.write_byte(addr, val);
                        self.bump_pc(3);}, 
-            // ROR_dx  => {}, 
-            // ROR_ax  => {}, 
+            RORZPgX  => {let addr = self.z_page_indexed_addr(interconnect, CPURegister::X);
+                         let mut val = self.z_page_indexed(interconnect, CPURegister::X);
+                         let carry = if self.check_flag(CARRY_FLAG) {1 << 7} else {0};
+                         if val & (1 << 0) != 0 {self.set_flag(CARRY_FLAG);} else {self.unset_flag(CARRY_FLAG);}
+                         val = (val >> 1) | carry;
+                         if val  & 0b1000_0000 != 0 {
+                             self.set_flag(NEGATIVE_FLAG);
+                         } else {
+                             self.unset_flag(NEGATIVE_FLAG);
+                         };
+                         if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                         interconnect.write_byte(addr, val);
+                         self.bump_pc(2);}, 
+            RORAx  => {let addr = self.absolute_indexed_addr(interconnect, CPURegister::X);
+                       let mut val = self.absolute_indexed(interconnect, CPURegister::X);
+                       let carry = if self.check_flag(CARRY_FLAG) {1 << 7} else {0};
+                       if val & (1 << 0) != 0 {self.set_flag(CARRY_FLAG);} else {self.unset_flag(CARRY_FLAG);}
+                       val = (val >> 1) | carry;
+                       if val  & 0b1000_0000 != 0 {
+                           self.set_flag(NEGATIVE_FLAG);
+                       } else {
+                           self.unset_flag(NEGATIVE_FLAG);
+                       };
+                       if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                       interconnect.write_byte(addr, val);
+                       self.bump_pc(3);}, 
 
             // Increments
             DECZpg => {let addr = interconnect.read_byte(self.get_pc() + 1);
@@ -586,8 +707,30 @@ impl Cpu {
                        if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
                        interconnect.write_byte(addr, val);
                        self.bump_pc(3);}, 
-            // DEC_dx  => {}, 
-            // DEC_ax  => {}, 
+            DECZPgX  => {let addr = self.z_page_indexed_addr(interconnect, CPURegister::X);
+                         let temp_val = interconnect.read_byte(addr);
+                         let val = temp_val.wrapping_sub(1);
+                         if val > temp_val {self.set_flag(OVERFLOW_FLAG);} else {self.unset_flag(OVERFLOW_FLAG);}
+                         if val  & 0b1000_0000 != 0 {
+                             self.set_flag(NEGATIVE_FLAG);
+                         } else {
+                             self.unset_flag(NEGATIVE_FLAG);
+                         };
+                         if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                         interconnect.write_byte(addr, val);
+                         self.bump_pc(2);}, 
+            DECAx  => {let addr = self.absolute_indexed_addr(interconnect, CPURegister::X);
+                       let temp_val = interconnect.read_byte(addr);
+                       let val = temp_val.wrapping_sub(1);
+                       if val > temp_val {self.set_flag(OVERFLOW_FLAG);} else {self.unset_flag(OVERFLOW_FLAG);}
+                       if val  & 0b1000_0000 != 0 {
+                           self.set_flag(NEGATIVE_FLAG);
+                       } else {
+                           self.unset_flag(NEGATIVE_FLAG);
+                       };
+                       if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                       interconnect.write_byte(addr, val);
+                       self.bump_pc(3);}, 
 
             INCZPg=> {let addr = interconnect.read_byte(self.get_pc() + 1);
                       let temp_val = interconnect.read_byte(addr as u16);
@@ -613,9 +756,31 @@ impl Cpu {
                       if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
                       interconnect.write_byte(addr, val);
                       self.bump_pc(3);}, 
-            // INC_dx  => {}, 
-            // INC_ax  => {}, 
-
+            INCZPgX  => {let addr = self.z_page_indexed_addr(interconnect, CPURegister::X);
+                         let temp_val = interconnect.read_byte(addr);
+                         let val = temp_val.wrapping_add(1);
+                         if val < temp_val {self.set_flag(OVERFLOW_FLAG);} else {self.unset_flag(OVERFLOW_FLAG);}
+                         if val  & 0b1000_0000 != 0 {
+                          self.set_flag(NEGATIVE_FLAG);
+                         } else {
+                          self.unset_flag(NEGATIVE_FLAG);
+                         };
+                         if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                         interconnect.write_byte(addr, val);
+                         self.bump_pc(2);}, 
+            INCAx  => {let addr = self.absolute_indexed_addr(interconnect, CPURegister::X);
+                       let temp_val = interconnect.read_byte(addr);
+                       let val = temp_val.wrapping_add(1);
+                       if val < temp_val {self.set_flag(OVERFLOW_FLAG);} else {self.unset_flag(OVERFLOW_FLAG);}
+                       if val  & 0b1000_0000 != 0 {
+                           self.set_flag(NEGATIVE_FLAG);
+                       } else {
+                           self.unset_flag(NEGATIVE_FLAG);
+                       };
+                       if val  == 0 {self.set_flag(ZERO_FLAG);} else {self.unset_flag(ZERO_FLAG);};
+                       interconnect.write_byte(addr, val);
+                       self.bump_pc(3);}, 
+            
             // The ever important nop
             // Observe all its majesty
             NOP => {self.bump_pc(1);},
@@ -638,14 +803,24 @@ impl Cpu {
     /// Should only take CPURegister::X or CPURegister::Y as an argument
     fn absolute_indexed(&self, interconnect: &Interconnect, register: CPURegister) -> u8 {
         let addr = interconnect.read_word(self.get_pc() + 1);
-        let sum_addr = addr + (self.read_reg(register) as u16);
+        let sum_addr = addr.wrapping_add((self.read_reg(register) as u16));
         interconnect.read_byte(sum_addr)
+    }
+
+    fn absolute_indexed_addr(&self, interconnect: &Interconnect, register: CPURegister) -> u16 {
+        let addr = interconnect.read_word(self.get_pc() + 1);
+        addr.wrapping_add((self.read_reg(register) as u16))
     }
 
     fn z_page_indexed(&self, interconnect: &Interconnect, register: CPURegister) -> u8 {
         let addr = interconnect.read_byte(self.get_pc() + 1);
         let sum_addr = addr.wrapping_add(self.read_reg(register));
         interconnect.read_byte(sum_addr as u16)
+    }
+
+    fn z_page_indexed_addr(&self, interconnect: &Interconnect, register: CPURegister) -> u16 {
+        let addr = interconnect.read_byte(self.get_pc() + 1);
+        addr.wrapping_add(self.read_reg(register)) as u16
     }
 
     // PRETTIFYME
