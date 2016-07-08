@@ -15,7 +15,9 @@ const PPU_MIRRORS_BEG: u16 = 0x2008;
 const PPU_MIRRORS_END: u16 = 0x3fff;
 
 const APU_REGS_BEG: u16 = 0x4000;
-const APU_REGS_END: u16 = 0x401f;
+const APU_REGS_END: u16 = 0x4013;
+const APU_STATUS: u16 = 0x4015;
+const APU_FRAME_COUNTER: u16 = 0x4017;
 
 const CART_SPACE_BEG: u16 = 0x4020;
 const CART_SPACE_END: u16 = 0xffff;
@@ -43,7 +45,7 @@ pub fn map_virt_addr(addr: u16) -> PhysAddr {
         PPU_REGS_BEG...PPU_REGS_END => PhysAddr::PpuRegs(addr),
         PPU_MIRRORS_BEG...PPU_MIRRORS_END => PhysAddr::PpuMirrors(addr),
 
-        APU_REGS_BEG...APU_REGS_END => PhysAddr::ApuRegs(addr),
+        APU_REGS_BEG...APU_REGS_END | APU_STATUS | APU_FRAME_COUNTER => PhysAddr::ApuRegs(addr),
 
         CART_SPACE_BEG...CART_SPACE_END => PhysAddr::CartSpace(addr),
 
