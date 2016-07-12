@@ -16,15 +16,13 @@ mod instructions;
 #[macro_use]
 extern crate enum_primitive;
 #[macro_use]
-extern crate nom;
 extern crate num;
-extern crate byteorder;
+extern crate sdl2;
 
 fn main() {
     let rom_name = env::args().nth(1).unwrap();
 
     let cart_rom = read_cartridge(rom_name);
-    // TODO implement header checking
 
     let mut nes = nes::Nes::new(&cart_rom);
     nes.power_up(cart_rom);
