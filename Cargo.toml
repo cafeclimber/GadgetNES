@@ -1,9 +1,9 @@
 [package]
 name = "gadget_nes"
 version = "0.1.0"
-authors = ["Ryan Campbell <rdcampbell1990@gmail.com"]
+authors = ["Ryan Campbell <rdcampbell1990@gmail.com>"]
 
 [dependencies]
 num       =      "0.1.30"
 enum_primitive = "0.1.0"
-sdl2 = "0.21"
+sdl2 = "0.21.0"
