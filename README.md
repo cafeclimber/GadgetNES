@@ -6,6 +6,11 @@ Purpose
 -------
 My goal for this project is to become more familiar with Rust, develop my programming skills, and learn some emulator development to hopefully make more projects!
 
+Design Choices
+--------------
+Here are some reasons for various design choices I made while writing this emulator:
+* Graphics: SDL2. There are Rust bindings for SDL and there is quite a large amount of documentation and examples (mostly for C++) that is applicable. This is my first time really doing graphics/audio/input programming (outisde of FLTK in my intro comp-sci class) so I am still having to learn quite a bit while writing (which is likely contributing to the amount of time it's taking me to write this D:)
+
 Documents
 ---------
 These are documents or websites I have found particularly useful during this project:
