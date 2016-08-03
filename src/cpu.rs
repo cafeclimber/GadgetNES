@@ -12,8 +12,8 @@ const IRQ_FLAG:       u8 = 1 << 2;
 const ZERO_FLAG:      u8 = 1 << 1;
 const CARRY_FLAG:     u8 = 1 << 0;
 
-const NMI_VECTOR: u16 = 0xfffa;
-const RESET_VECTOR: u16 = 0xfffc;
+// const NMI_VECTOR: u16 = 0xfffa;
+// const RESET_VECTOR: u16 = 0xfffc;
 const IRQBRK_VECTOR: u16 = 0xfffe;
 
 #[derive(Default)]
@@ -31,6 +31,7 @@ pub struct Cpu {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 enum AddressingMode {
     Accumulator,
     Implied,

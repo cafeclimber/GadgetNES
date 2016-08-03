@@ -8,6 +8,7 @@ mod cpu;
 mod apu;
 mod ppu;
 mod cart;
+mod sdl;
 mod mem_map;
 mod mapper;
 mod interconnect;
@@ -17,7 +18,6 @@ mod instructions;
 extern crate enum_primitive;
 #[macro_use]
 extern crate num;
-extern crate sdl2;
 
 fn main() {
     let rom_name = env::args().nth(1).unwrap();
