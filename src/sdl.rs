@@ -7,17 +7,22 @@ use self::sdl2::surface::Surface;
 
 use std::path::Path;
 
-const SCREEN_WIDTH: u32 = 256;
-const SCREEN_HEIGHT: u32 = 240;
+const DEFAULT_SCREEN_WIDTH: u32 = 256;
+static DEFAULT_SCREEN_HEIGHT: u32 = 240;
 
 pub enum Input {
     Continue,
     Quit,
 }
 
+pub enum ScreenSize {
+    Default,
+    Medium,
+    Large,
+}
+
 pub struct SDLInterface<'a> {
     sdl_context: sdl2::Sdl,
-    video: sdl2::VideoSubsystem,
     renderer: sdl2::render::Renderer<'a>,
     event_pump: sdl2::EventPump,
 }
@@ -33,8 +38,8 @@ impl<'a> SDLInterface<'a> {
         );
         let window = video_context.window(
             "GadgetNES",
-            SCREEN_WIDTH,
-            SCREEN_HEIGHT,
+            DEFAULT_SCREEN_WIDTH,
+            DEFAULT_SCREEN_HEIGHT,
         )
             .position_centered()
             .build()
@@ -46,10 +51,22 @@ impl<'a> SDLInterface<'a> {
             
         SDLInterface {
             sdl_context: sdl_context,
-            video: video_context,
             renderer: renderer,
             event_pump: event_pump,
         }
+    }
+
+    pub fn set_screen_size(&mut self, screen_size: ScreenSize) {
+        let (width, height) = match screen_size {
+            ScreenSize::Default => (256, 240),
+            ScreenSize::Medium => (512, 480),
+            ScreenSize::Large => (1024, 960),
+        };
+        {
+            let mut window = self.renderer.window_mut().unwrap();
+            window.set_size(width, height).unwrap();
+        }
+        self.renderer.set_logical_size(width, height).unwrap();
     }
 
     pub fn load_bmp<P: AsRef<Path>>(&mut self, path: P) {

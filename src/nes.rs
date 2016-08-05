@@ -1,5 +1,5 @@
 use cpu::Cpu;
-use super::sdl::{SDLInterface, Input};
+use super::sdl::{SDLInterface, Input, ScreenSize};
 use interconnect::Interconnect;
 
 use std::thread::sleep_ms;
@@ -30,7 +30,8 @@ impl<'a> Nes<'a> {
         self.interconnect.power_up(cart_rom);
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self, screen_scaling: ScreenSize) {
+        self.sdl_interface.set_screen_size(screen_scaling);
         let mut game_state = GameState::Run;
         self.sdl_interface.load_bmp("assets/GadgetNES.bmp");
         sleep_ms(1500);

@@ -3,6 +3,8 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+use self::sdl::ScreenSize;
+
 mod nes;
 mod cpu;
 mod apu;
@@ -21,12 +23,18 @@ extern crate num;
 
 fn main() {
     let rom_name = env::args().nth(1).unwrap();
-
+    let screen_size = match env::args().nth(2) {
+        Some(ref x) if x == "default"=> ScreenSize::Default,
+        Some(ref x) if x == "medium" => ScreenSize::Medium,
+        Some(ref x) if x == "large" => ScreenSize::Large,
+        _ => panic!("Unsupported screen size"),
+    };
+    
     let cart_rom = read_cartridge(rom_name);
 
     let mut nes = nes::Nes::new(&cart_rom);
     nes.power_up(cart_rom);
-    nes.run();
+    nes.run(screen_size);
 }
 
 // Thanks to yupferris for this!
