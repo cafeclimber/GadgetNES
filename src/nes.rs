@@ -2,6 +2,8 @@ use cpu::Cpu;
 use super::sdl::{SDLInterface, Input};
 use interconnect::Interconnect;
 
+use std::thread::sleep_ms;
+
 #[derive(PartialEq)]
 enum GameState {
     Run,
@@ -30,7 +32,9 @@ impl<'a> Nes<'a> {
 
     pub fn run(&mut self) {
         let mut game_state = GameState::Run;
-        
+        self.sdl_interface.load_bmp("assets/GadgetNES.bmp");
+        sleep_ms(1500);
+
         while game_state != GameState::Quit {
             self.sdl_interface.set_clear_color(255, 0, 0);
             self.sdl_interface.display();

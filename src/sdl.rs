@@ -3,6 +3,9 @@ extern crate sdl2;
 use self::sdl2::event::Event;
 use self::sdl2::keyboard::Keycode;
 use self::sdl2::pixels::Color;
+use self::sdl2::surface::Surface;
+
+use std::path::Path;
 
 const SCREEN_WIDTH: u32 = 256;
 const SCREEN_HEIGHT: u32 = 240;
@@ -47,6 +50,14 @@ impl<'a> SDLInterface<'a> {
             renderer: renderer,
             event_pump: event_pump,
         }
+    }
+
+    pub fn load_bmp<P: AsRef<Path>>(&mut self, path: P) {
+        let bmp = Surface::load_bmp(path).unwrap();
+        let bmp_texture = self.renderer.create_texture_from_surface(bmp).unwrap();
+        self.renderer.clear();
+        self.renderer.copy(&bmp_texture, None, None);
+        self.renderer.present();
     }
 
     pub fn set_clear_color(&mut self, red: u8, green: u8, blue: u8) {
