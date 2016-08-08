@@ -32,9 +32,9 @@ fn main() {
     
     let cart_rom = read_cartridge(rom_name);
 
-    let mut nes = nes::Nes::new(&cart_rom);
+    let mut nes = nes::Nes::new(&cart_rom, screen_size);
     nes.power_up(cart_rom);
-    nes.run(screen_size);
+    nes.run();
 }
 
 // Thanks to yupferris for this!

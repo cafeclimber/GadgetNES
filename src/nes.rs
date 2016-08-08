@@ -17,11 +17,11 @@ pub struct Nes<'a> {
 }
 
 impl<'a> Nes<'a> {
-    pub fn new(cart_rom: &Vec<u8>) -> Nes<'a> {
+    pub fn new(cart_rom: &Vec<u8>, scale: ScreenSize) -> Nes<'a> {
         Nes {
             cpu: Cpu::new(),
             interconnect: Interconnect::new(&cart_rom),
-            sdl_interface: SDLInterface::new(),
+            sdl_interface: SDLInterface::new(scale),
         }
     }
 
@@ -30,8 +30,7 @@ impl<'a> Nes<'a> {
         self.interconnect.power_up(cart_rom);
     }
 
-    pub fn run(&mut self, screen_scaling: ScreenSize) {
-        self.sdl_interface.set_screen_size(screen_scaling);
+    pub fn run(&mut self) {
         let mut game_state = GameState::Run;
         self.sdl_interface.load_bmp("assets/GadgetNES.bmp");
         sleep_ms(1500);
