@@ -29,7 +29,7 @@ pub struct Cpu {
 
     status: u8, // Status register
 
-    cycles: u64,
+    pub cycles: u64,
 }
 
 #[derive(Debug)]

@@ -6,7 +6,7 @@ use super::cart::Cartridge;
 pub struct Interconnect {
     pub ram: Box<[u8]>,
     apu: Apu,
-    ppu: Ppu,
+    pub ppu: Ppu,
     cart: Cartridge,
 }
 

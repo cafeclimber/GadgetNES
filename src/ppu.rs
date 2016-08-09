@@ -53,6 +53,8 @@ impl Ppu {
     pub fn power_up(&mut self) {
         self.ppustatus = 0b10100000;
     }
+
+    pub fn step(&mut self, cycles: &u64) {}
 }
 
 impl fmt::Debug for Ppu {

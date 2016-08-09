@@ -36,16 +36,13 @@ impl<'a> Nes<'a> {
         sleep_ms(1500);
 
         while game_state != GameState::Quit {
-            self.sdl_interface.set_clear_color(255, 0, 0);
+            self.cpu.run_instr(&mut self.interconnect);
+            self.interconnect.ppu.step(&self.cpu.cycles);
             self.sdl_interface.display();
             game_state = match self.sdl_interface.check_input() {
                 Input::Quit => { GameState::Quit },
                 Input::Continue => { GameState::Run },
             }
-        }
-
-        loop {
-            self.cpu.run_instr(&mut self.interconnect);
         }
     }
 }
