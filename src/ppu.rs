@@ -2,6 +2,7 @@ use std::fmt;
 
 const SCREEN_WIDTH: usize = 256;
 const SCREEN_HEIGHT: usize = 240;
+const CPU_CYCLES_PER_SCANLINE: u16 = 114;
 
 // Shamlessly copied from SprocketNES...too much typing
 static PALETTE: [u8; 192] = [
@@ -34,7 +35,9 @@ pub struct Ppu {
     ppudata: u8,
     oamdma: u8,
 
-    cycles: u64,
+    ppu_cycle: u16,
+    cycles: 
+    scanline: u16,
     pub frame: Box<[u8; SCREEN_WIDTH*SCREEN_HEIGHT*3]>,
 }
 
@@ -51,7 +54,8 @@ impl Ppu {
             ppudata: 0,
             oamdma: 0,
 
-            cycles: 0,
+            ppu_cycle: 0,
+            scanline: 0,
             frame: Box::new([0u8; SCREEN_WIDTH*SCREEN_HEIGHT*3]),
         }
     }
@@ -96,8 +100,29 @@ impl Ppu {
         self.ppustatus = 0b10100000;
     }
 
-    pub fn step(&mut self, cpu_cycle: &u64) {
-        
+    fn render_scanline(&mut self) {
+        for scanline_cycle in 0..340{
+            match self.ppu_cycle {
+                0 => {}, // Idle cyle
+                1...256 => {}, // Visible
+                257...320 => {}, // Sprite Pre-fetch
+                321...336 => {}, // Tile Pre-fetch
+                337...340 => {}, // Unused Nametable fetch
+            }
+        }
+        self.scanline += 1;
+    }
+
+    pub fn step(&mut self, current_cpu_cycle: &u64) {
+        while self.cycles < current_cpu_cycle {
+            self.render_scanline();
+            if self.scanline == VBLANK_SCANLINE {
+                self.vblank();
+            } else if self.scanline == FINAL_SCANLINE {
+                self.scanline = 0;
+            }
+            self.cycles += CPU_CYCLES_PER_SCANLINE; // It's easier to just deal in cpu cycles.
+        }
     }
 }
 
