@@ -7,8 +7,10 @@ use self::sdl2::surface::Surface;
 
 use std::path::Path;
 
-const DEFAULT_SCREEN_WIDTH: u32 = 256;
-static DEFAULT_SCREEN_HEIGHT: u32 = 240;
+const SCREEN_WIDTH: u32 = 256;
+const SCREEN_HEIGHT: u32 = 240;
+const SCREEN_SIZE: u32 = SCREEN_WIDTH * SCREEN_HEIGHT * 3; // In pixels times 3 for rgb
+
 
 pub enum Input {
     Continue,
@@ -34,6 +36,7 @@ impl ScreenSize {
 
 pub struct SDLInterface<'a> {
     renderer: sdl2::render::Renderer<'a>,
+    texture: sdl2::render::Texture,
     event_pump: sdl2::EventPump,
 }
 
@@ -48,8 +51,8 @@ impl<'a> SDLInterface<'a> {
         );
         let window = video_context.window(
             "GadgetNES",
-            DEFAULT_SCREEN_WIDTH * scale.factor(),
-            DEFAULT_SCREEN_HEIGHT * scale.factor(),
+            SCREEN_WIDTH * scale.factor(),
+            SCREEN_HEIGHT * scale.factor(),
         )
             .position_centered()
             .build()
@@ -57,32 +60,18 @@ impl<'a> SDLInterface<'a> {
                 |e| { panic!("Failed to initialize Window: {}", e) }
             );
         let renderer = window.renderer().build().unwrap();
+        let texture = renderer.create_texture_streaming(
+            sdl2::pixels::PixelFormatEnum::RGB24,
+            SCREEN_WIDTH, SCREEN_HEIGHT
+        ).unwrap();
         let event_pump = sdl_context.event_pump().unwrap();
             
         SDLInterface {
             renderer: renderer,
+            texture: texture,
             event_pump: event_pump,
         }
     }
-
-    // TODO: Does this work correctly?
-    // pub fn set_screen_size(&mut self, screen_size: ScreenSize) {
-        // let (width, height) = match screen_size {
-            // ScreenSize::Default => (256, 240),
-            // ScreenSize::Medium => (512, 480),
-            // ScreenSize::Large => (1024, 960),
-        // };
-        // {
-            // let mut window = self.renderer.window_mut().unwrap();
-            // window.set_size(width, height).unwrap();
-        // }
-        // let (render_scale_x, render_scale_y) = match screen_size {
-            // ScreenSize::Default => (1f32, 1f32),
-            // ScreenSize::Medium => (2f32, 2f32),
-            // ScreenSize::Large => (4f32, 4f32),
-        // };
-        // self.renderer.set_scale(render_scale_x, render_scale_y).unwrap();
-    // }
 
     pub fn load_bmp<P: AsRef<Path>>(&mut self, path: P) {
         let bmp = Surface::load_bmp(path).unwrap();
@@ -92,12 +81,10 @@ impl<'a> SDLInterface<'a> {
         self.renderer.present();
     }
 
-    pub fn set_clear_color(&mut self, red: u8, green: u8, blue: u8) {
-        let color = Color::RGB(red, green, blue);
-        self.renderer.set_draw_color(color);
-    }
-    pub fn display(&mut self) {
+    pub fn display_frame(&mut self, frame: &[u8; SCREEN_SIZE as usize]) {
+        self.texture.update(None, frame, (SCREEN_WIDTH*3) as usize).unwrap();
         self.renderer.clear();
+        self.renderer.copy(&self.texture, None, None);
         self.renderer.present();
     }
     pub fn check_input(&mut self) -> Input {

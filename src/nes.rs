@@ -38,7 +38,6 @@ impl<'a> Nes<'a> {
         while game_state != GameState::Quit {
             self.cpu.run_instr(&mut self.interconnect);
             self.interconnect.ppu.step(&self.cpu.cycles);
-            self.sdl_interface.display();
             game_state = match self.sdl_interface.check_input() {
                 Input::Quit => { GameState::Quit },
                 Input::Continue => { GameState::Run },

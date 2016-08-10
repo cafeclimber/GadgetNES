@@ -2,7 +2,6 @@ use std::fmt;
 use super::interconnect::Interconnect;
 use super::instructions::Instruction;
 
-// PRETTIFYME: Make an enum?
 const NEGATIVE_FLAG:  u8 = 1 << 7;
 const OVERFLOW_FLAG:  u8 = 1 << 6;
 const STACK_COPY:     u8 = 1 << 5;
@@ -76,7 +75,7 @@ impl Cpu {
             x: 0,
             y: 0,
 
-            pc: 0, // TODO make this a result of header information
+            pc: 0,
 
             stack_pointer: 0,
 

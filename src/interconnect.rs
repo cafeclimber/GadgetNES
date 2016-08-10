@@ -16,7 +16,7 @@ impl Interconnect {
         Interconnect {
             ram: vec![0; 0x0800].into_boxed_slice(),
             apu: Apu::default(),
-            ppu: Ppu::default(),
+            ppu: Ppu::new(),
             cart: Cartridge::new(cart_rom),
         }
     }
