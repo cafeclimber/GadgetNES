@@ -1,5 +1,5 @@
 use super::apu::Apu;
-use super::ppu::Ppu;
+use super::ppu::ppu::Ppu;
 use super::mapper::*;
 use super::cart::Cartridge;
 
@@ -16,7 +16,9 @@ impl Interconnect {
         Interconnect {
             ram: vec![0; 0x0800].into_boxed_slice(),
             apu: Apu::default(),
-            ppu: Ppu::new(),
+            // The interconnect owns the ppu so the cpu can more easily address it.
+            // In turn, the PPU owns it's own VRAM
+            ppu: Ppu::new(cart_rom), 
             cart: Cartridge::new(cart_rom),
         }
     }

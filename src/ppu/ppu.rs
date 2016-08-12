@@ -2,7 +2,11 @@ use std::fmt;
 
 const SCREEN_WIDTH: usize = 256;
 const SCREEN_HEIGHT: usize = 240;
-const CPU_CYCLES_PER_SCANLINE: u16 = 114;
+const CPU_CYCLES_PER_SCANLINE: u64 = 114;
+const IMG_SPR_MIRROR_BEG: u16 = 0x3f20;
+const IMG_SPR_MIRROR_END: u16 = 0x3fff;
+const MIRRORS_BEG: u16 = 0x4000;
+const MIRRORS_END: u16 = 0xffff;
 
 // Shamlessly copied from SprocketNES...too much typing
 static PALETTE: [u8; 192] = [
@@ -24,6 +28,30 @@ static PALETTE: [u8; 192] = [
     0,252,252,      248,216,248,    0,0,0,          0,0,0
 ];
 
+enum Scanline {
+    Visible(u8),
+    PostRender,
+    VBlank,
+    Final,
+}
+
+struct Vram {
+    palette: [u8; 0x20],
+    pattern_tables: [u8; 0x20],
+    name_tables: [u8; 0x800],
+}
+
+impl Vram {
+    // TODO: Handle Mappers
+    pub fn new(cart_rom: &Vec<u8>) -> Vram {
+        Vram {
+            palette: [0; 0x20],
+            pattern_tables: [0; 0x20],
+            name_tables: [0; 0x800],
+        }
+    }
+}
+
 pub struct Ppu {
     ppuctrl: u8,
     ppumask: u8,
@@ -35,14 +63,15 @@ pub struct Ppu {
     ppudata: u8,
     oamdma: u8,
 
-    ppu_cycle: u16,
-    cycles: 
-    scanline: u16,
+    vram: Vram,
+
+    cycles: u64,
+    scanline: Scanline,
     pub frame: Box<[u8; SCREEN_WIDTH*SCREEN_HEIGHT*3]>,
 }
 
 impl Ppu {
-    pub fn new() -> Ppu {
+    pub fn new(cart_rom: &Vec<u8>) -> Ppu {
         Ppu {
             ppuctrl: 0,
             ppumask: 0,
@@ -54,8 +83,10 @@ impl Ppu {
             ppudata: 0,
             oamdma: 0,
 
-            ppu_cycle: 0,
-            scanline: 0,
+            vram: Vram::new(cart_rom),
+
+            cycles: 0,
+            scanline: Scanline::Visible(0),
             frame: Box::new([0u8; SCREEN_WIDTH*SCREEN_HEIGHT*3]),
         }
     }
@@ -100,29 +131,62 @@ impl Ppu {
         self.ppustatus = 0b10100000;
     }
 
-    fn render_scanline(&mut self) {
-        for scanline_cycle in 0..340{
-            match self.ppu_cycle {
-                0 => {}, // Idle cyle
-                1...256 => {}, // Visible
-                257...320 => {}, // Sprite Pre-fetch
-                321...336 => {}, // Tile Pre-fetch
-                337...340 => {}, // Unused Nametable fetch
-            }
-        }
-        self.scanline += 1;
-    }
-
     pub fn step(&mut self, current_cpu_cycle: &u64) {
-        while self.cycles < current_cpu_cycle {
-            self.render_scanline();
-            if self.scanline == VBLANK_SCANLINE {
-                self.vblank();
-            } else if self.scanline == FINAL_SCANLINE {
-                self.scanline = 0;
+        while self.cycles < *current_cpu_cycle {
+            match self.scanline {
+                Scanline::Visible(line) => {
+                    self.render_scanline(line);
+                },
+                Scanline::PostRender => {},
+                Scanline::VBlank => {
+                    self.vblank();
+                },
+                Scanline::Final => {
+                    self.scanline = Scanline::Visible(0);
+                },
             }
             self.cycles += CPU_CYCLES_PER_SCANLINE; // It's easier to just deal in cpu cycles.
         }
+    }
+
+    fn render_scanline(&mut self, line: u8) {
+        let mut ppu_cycle = 0;
+        while ppu_cycle < 341 {
+            match ppu_cycle {
+                0 => {},
+                1...256 => {
+                    let nm_byte = self.fetch_nametable_byte(&mut ppu_cycle);
+                    let attr_byte = self.fetch_attribute_byte(&mut ppu_cycle);
+                    let tile_bitmap = self.fetch_tile_bitmap(&mut ppu_cycle);
+                }, 
+                257...320 => {
+                    self.fetch_nametable_byte(&mut ppu_cycle);
+                    self.fetch_attribute_byte(&mut ppu_cycle);
+                    let tile_bitmap = self.fetch_tile_bitmap(&mut ppu_cycle);
+                },
+                321...336 => {
+
+                },
+                337...340 => {},
+                _ => unreachable!(),
+            }
+        }
+        self.scanline = Scanline::Visible(line + 1);
+    }
+
+    fn vblank(&mut self) {}
+
+    fn fetch_nametable_byte(&mut self, ppu_cycle: &mut u16) -> u8 {
+        *ppu_cycle += 2;
+        0
+    }
+    fn fetch_attribute_byte(&mut self, ppu_cycle: &mut u16) -> u8 {
+        *ppu_cycle += 2;
+        0
+    }
+    fn fetch_tile_bitmap(&mut self, ppu_cycle: &mut u16) -> u8 {
+        *ppu_cycle += 4;
+        0
     }
 }
 

@@ -20,7 +20,7 @@ impl<'a> Nes<'a> {
     pub fn new(cart_rom: &Vec<u8>, scale: ScreenSize) -> Nes<'a> {
         Nes {
             cpu: Cpu::new(),
-            interconnect: Interconnect::new(&cart_rom),
+            interconnect: Interconnect::new(cart_rom),
             sdl_interface: SDLInterface::new(scale),
         }
     }
@@ -37,7 +37,7 @@ impl<'a> Nes<'a> {
 
         while game_state != GameState::Quit {
             self.cpu.run_instr(&mut self.interconnect);
-            self.interconnect.ppu.step(&self.cpu.cycles);
+            // self.interconnect.ppu.step(&self.cpu.cycles);
             game_state = match self.sdl_interface.check_input() {
                 Input::Quit => { GameState::Quit },
                 Input::Continue => { GameState::Run },
