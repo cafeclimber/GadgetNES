@@ -153,24 +153,37 @@ impl Ppu {
         let mut ppu_cycle = 0;
         while ppu_cycle < 341 {
             match ppu_cycle {
-                0 => {},
+                0 => {
+                    ppu_cycle += 1;
+                    println!("Pre-render cycle: {:?}", ppu_cycle);
+                },
                 1...256 => {
                     let nm_byte = self.fetch_nametable_byte(&mut ppu_cycle);
                     let attr_byte = self.fetch_attribute_byte(&mut ppu_cycle);
                     let tile_bitmap = self.fetch_tile_bitmap(&mut ppu_cycle);
+                    println!("Scanline rendering cycle: {:?}", ppu_cycle);
                 }, 
                 257...320 => {
                     self.fetch_nametable_byte(&mut ppu_cycle);
                     self.fetch_attribute_byte(&mut ppu_cycle);
                     let tile_bitmap = self.fetch_tile_bitmap(&mut ppu_cycle);
+                    println!("Fetching sprites for nect scanline: {:?}", ppu_cycle);
                 },
                 321...336 => {
-
+                    let nm_byte = self.fetch_nametable_byte(&mut ppu_cycle);
+                    let attr_byte = self.fetch_attribute_byte(&mut ppu_cycle);
+                    let tile_bitmap = self.fetch_tile_bitmap(&mut ppu_cycle);
+                    println!("Fetching first two tiles for next scanline: {:?}", ppu_cycle);
                 },
-                337...340 => {},
+                337...340 => {
+                    self.fetch_nametable_byte(&mut ppu_cycle);
+                    self.fetch_nametable_byte(&mut ppu_cycle);
+                    println!("Unused nametable fetches: {:?}", ppu_cycle);
+                },
                 _ => unreachable!(),
             }
         }
+        self.cycles += CPU_CYCLES_PER_SCANLINE;
         self.scanline = Scanline::Visible(line + 1);
     }
 
