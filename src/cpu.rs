@@ -1561,7 +1561,8 @@ impl Cpu {
         let branch_target = match interrupt {
             Interrupt::BRK => {
                 self.set_flag(BRK_FLAG);
-                interconnect.read_word(IRQBRK_VECTOR)
+                let addr = interconnect.read_word(IRQBRK_VECTOR);
+                addr
             },
             Interrupt::IRQ => {
                 self.cycles += 7;

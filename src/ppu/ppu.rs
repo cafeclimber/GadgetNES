@@ -70,10 +70,12 @@ pub struct Ppu {
     oamdma: u8,
 
     vram: Vram,
+    oam: Box<[u8; 0xff]>,
 
     cycles: u64,
     scanline: Scanline,
     pub frame: Box<[u8; SCREEN_WIDTH*SCREEN_HEIGHT*3]>,
+    mirroring: u8,
 }
 
 impl Ppu {
@@ -90,10 +92,12 @@ impl Ppu {
             oamdma: 0,
 
             vram: Vram::new(cart_rom),
+            oam: Box::new([0u8; 0xff]),
 
             cycles: 0,
             scanline: Scanline::PreRender,
             frame: Box::new([0u8; SCREEN_WIDTH*SCREEN_HEIGHT*3]),
+            mirroring: (cart_rom[6] & 1<<0) | (cart_rom[6] & 1<<3),
         }
     }
     
@@ -137,6 +141,7 @@ impl Ppu {
         self.ppustatus = 0b10100000;
     }
 
+    // Returns whether the NMI is currently allowed
     pub fn step(&mut self, current_cpu_cycle: &u64) -> bool {
         let mut vblank = false;
         while self.cycles < *current_cpu_cycle {
@@ -186,6 +191,7 @@ impl Ppu {
                     // println!("Scanline rendering cycle: {:?}", ppu_cycle);
                 }, 
                 257...320 => {
+                    // This is done for accuracy. In the NES, these bytes are fetched, but unused
                     self.fetch_nametable_byte(&mut ppu_cycle);
                     self.fetch_attribute_byte(&mut ppu_cycle);
                     let tile_bitmap = self.fetch_tile_bitmap(&mut ppu_cycle);
@@ -198,6 +204,7 @@ impl Ppu {
                     // println!("Fetching first two tiles for next scanline: {:?}", ppu_cycle);
                 },
                 337...340 => {
+                    // This is done for accuracy. In the NES, these bytes are fetched, but unused
                     self.fetch_nametable_byte(&mut ppu_cycle);
                     self.fetch_nametable_byte(&mut ppu_cycle);
                     // println!("Unused nametable fetches: {:?}", ppu_cycle);

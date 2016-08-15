@@ -15,6 +15,7 @@ pub fn choose_mapper(rom_header: &RomHeader) -> Box<Mapper> {
     }
 }
 
+
 struct Mapper0 {
     prg_ram: Vec<u8>,
     prg_rom: Vec<u8>,
@@ -65,6 +66,7 @@ impl Mapper for Mapper0 {
         if addr < 0x8000 {
             panic!("Attempted to read from RAM using CHR ROM Read");
         } else if self.prg_rom.len() > 16392 {
+            println!("Yes it's smaller");
             self.prg_rom[addr as usize & 0x7fff]
         } else {
             self.prg_rom[addr as usize & 0x3fff]
@@ -73,6 +75,6 @@ impl Mapper for Mapper0 {
 
     fn load_rom(&mut self, rom: Vec<u8>) {
         self.prg_rom = rom[16..16400].to_owned();
-        self.chr = rom[16392..].to_owned();
+        self.chr = rom[16400..].to_owned();
     }
 }

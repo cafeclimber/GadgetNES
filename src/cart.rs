@@ -5,6 +5,12 @@ pub struct Cartridge {
     pub mapper: Box<Mapper>,
 }
 
+pub enum Mirroring {
+    Horizontal,
+    Vertical,
+    FourWay,
+}
+
 pub struct RomHeader {
     pub prg_rom_size: u8, // In 16kB units
     pub prg_ram_size: u8, // In 8kB units
