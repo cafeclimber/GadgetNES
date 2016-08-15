@@ -1,4 +1,4 @@
-use cpu::Cpu;
+use cpu::{Cpu, Interrupt};
 use super::sdl::{SDLInterface, Input, ScreenSize};
 use interconnect::Interconnect;
 
@@ -37,7 +37,10 @@ impl<'a> Nes<'a> {
 
         while game_state != GameState::Quit {
             self.cpu.run_instr(&mut self.interconnect);
-            self.interconnect.ppu.step(&self.cpu.cycles);
+            let vblank = self.interconnect.ppu.step(&self.cpu.cycles);
+            if vblank {
+                self.cpu.interrupt(&mut self.interconnect, Interrupt::NMI);
+            }
             game_state = match self.sdl_interface.check_input() {
                 Input::Quit => { GameState::Quit },
                 Input::Continue => { GameState::Run },

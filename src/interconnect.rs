@@ -53,8 +53,8 @@ impl Interconnect {
             PhysAddr::RamMirrorOne(addr) => {self.ram[(addr - 0x0800) as usize] = val;},
             PhysAddr::RamMirrorTwo(addr) => {self.ram[(addr - 2 * 0x0800) as usize] = val;},
             PhysAddr::RamMirrorThree(addr) => {self.ram[(addr - 3 * 0x0800) as usize] = val;},
-            PhysAddr::PpuRegs(addr) => {self.ppu.write_to_reg(addr - 0x2000, val)},
-            PhysAddr::PpuMirrors(addr) => {self.ppu.write_to_reg((addr - 0x2000) % 8, val)},
+            PhysAddr::PpuRegs(addr) => {self.ppu.write_to_reg(addr, val)},
+            PhysAddr::PpuMirrors(addr) => {self.ppu.write_to_reg(addr % 8, val)},
             PhysAddr::ApuRegs(addr) => {self.apu.write_to_reg(addr - 0x4000, val)},
             PhysAddr::CartSpace(addr) => {self.cart.write_byte_to_cart(addr, val);},
         }

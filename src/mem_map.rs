@@ -10,6 +10,7 @@ const RAM_MIRROR_THREE_END: u16 = 0x1fff;
 
 const PPU_REGS_BEG: u16 = 0x2000;
 const PPU_REGS_END: u16 = 0x2007;
+const PPU_OAMDMA_REG: u16 = 0x4014;
 
 const PPU_MIRRORS_BEG: u16 = 0x2008;
 const PPU_MIRRORS_END: u16 = 0x3fff;
@@ -44,6 +45,8 @@ pub fn map_virt_addr(addr: u16) -> PhysAddr {
 
         PPU_REGS_BEG...PPU_REGS_END => PhysAddr::PpuRegs(addr),
         PPU_MIRRORS_BEG...PPU_MIRRORS_END => PhysAddr::PpuMirrors(addr),
+
+        PPU_OAMDMA_REG => PhysAddr::PpuRegs(addr),
 
         APU_REGS_BEG...APU_REGS_END | APU_STATUS | APU_FRAME_COUNTER => PhysAddr::ApuRegs(addr),
 

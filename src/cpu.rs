@@ -2,18 +2,25 @@ use std::fmt;
 use super::interconnect::Interconnect;
 use super::instructions::Instruction;
 
-const NEGATIVE_FLAG:  u8 = 1 << 7;
-const OVERFLOW_FLAG:  u8 = 1 << 6;
-const STACK_COPY:     u8 = 1 << 5;
-const BRK_FLAG:       u8 = 1 << 4;
-const DECIMAL_FLAG:   u8 = 1 << 3;
-const IRQ_FLAG:       u8 = 1 << 2;
-const ZERO_FLAG:      u8 = 1 << 1;
-const CARRY_FLAG:     u8 = 1 << 0;
+const NEGATIVE_FLAG:    u8 = 1 << 7;
+const OVERFLOW_FLAG:    u8 = 1 << 6;
+const STACK_COPY:       u8 = 1 << 5;
+const BRK_FLAG:         u8 = 1 << 4;
+const DECIMAL_FLAG:     u8 = 1 << 3;
+const IRQ_INHIBIT_FLAG: u8 = 1 << 2;
+const ZERO_FLAG:        u8 = 1 << 1;
+const CARRY_FLAG:       u8 = 1 << 0;
 
-// const NMI_VECTOR: u16 = 0xfffa;
-// const RESET_VECTOR: u16 = 0xfffc;
+const NMI_VECTOR: u16 = 0xfffa;
+const RESET_VECTOR: u16 = 0xfffc;
 const IRQBRK_VECTOR: u16 = 0xfffe;
+
+pub enum Interrupt {
+    NMI,
+    RESET,
+    IRQ,
+    BRK,
+}
 
 #[derive(Default)]
 pub struct Cpu {
@@ -159,9 +166,6 @@ impl Cpu {
         }
     }
 
-    // IDEA: Make each instruction return tuple of status regs to set? to call after match arm? closure perhaps to form u8?
-    // TODO: Fetch instruction, then run it. Should make printing better
-    // TODO: Cycles
     pub fn run_instr(&mut self, interconnect: &mut Interconnect) {
         use enum_primitive::FromPrimitive;
         use instructions::Instruction::*;
@@ -176,13 +180,7 @@ impl Cpu {
             // TODO: Implement unofficial opcodes
 
             BRK => {
-                self.bump_pc(2);
-                self.push_return_addr(interconnect);
-                let status = self.read_reg(CPURegister::Status);
-                self.set_flag(IRQ_FLAG);
-                self.push_byte_stack(interconnect, status);
-                let branch_target = interconnect.read_word(IRQBRK_VECTOR);
-                self.jmp(branch_target);
+                self.interrupt(interconnect, Interrupt::BRK);
                 7
             },
 
@@ -244,7 +242,7 @@ impl Cpu {
             CLC => {self.unset_flag(CARRY_FLAG); self.bump_pc(1);2},
             SEC => {self.set_flag(CARRY_FLAG); self.bump_pc(1);2},
             // CLI => {},
-            SEI => {self.set_flag(IRQ_FLAG); self.bump_pc(1);2},
+            SEI => {self.set_flag(IRQ_INHIBIT_FLAG); self.bump_pc(1);2},
             CLV => {self.unset_flag(OVERFLOW_FLAG); self.bump_pc(1);2},
             CLD => {self.unset_flag(DECIMAL_FLAG); self.bump_pc(1);2},
             SED => {self.set_flag(DECIMAL_FLAG); self.bump_pc(1);2},
@@ -1549,6 +1547,36 @@ impl Cpu {
 
     fn sub(&mut self, arg: u8) {
         self.add(!arg);
+    }
+
+    pub fn interrupt(&mut self, interconnect: &mut Interconnect, interrupt: Interrupt) {
+        self.bump_pc(2);
+        self.set_flag(IRQ_INHIBIT_FLAG);
+        self.unset_flag(BRK_FLAG);
+        let status = self.read_reg(CPURegister::Status);
+        self.set_flag(IRQ_INHIBIT_FLAG);
+        self.push_return_addr(interconnect);
+        self.push_byte_stack(interconnect, status);
+
+        let branch_target = match interrupt {
+            Interrupt::BRK => {
+                self.set_flag(BRK_FLAG);
+                interconnect.read_word(IRQBRK_VECTOR)
+            },
+            Interrupt::IRQ => {
+                self.cycles += 7;
+                interconnect.read_word(IRQBRK_VECTOR)
+            },
+            Interrupt::NMI => {
+                self.cycles += 7;
+                interconnect.read_word(NMI_VECTOR)
+            },
+            Interrupt::RESET => {
+                self.cycles += 7;
+                interconnect.read_word(RESET_VECTOR)
+            },
+        };
+        self.jmp(branch_target);
     }
 }
 
