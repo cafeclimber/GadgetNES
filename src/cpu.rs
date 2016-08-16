@@ -1,6 +1,7 @@
 use std::fmt;
 use super::interconnect::Interconnect;
 use super::instructions::Instruction;
+use super::ppu::ppu::Ppu;
 
 const NEGATIVE_FLAG:    u8 = 1 << 7;
 const OVERFLOW_FLAG:    u8 = 1 << 6;
@@ -110,34 +111,34 @@ impl Cpu {
         self.status = self.status & !flag;
     }
 
-    fn push_byte_stack(&mut self, interconnect: &mut Interconnect, byte: u8) {
+    fn push_byte_stack(&mut self, interconnect: &mut Interconnect, ppu: &mut Ppu, byte: u8) {
         let addr = self.read_reg(CPURegister::StackPointer) as u16 + 0x100;
-        interconnect.write_byte(addr, byte);
+        interconnect.write_byte(ppu, addr, byte);
         self.stack_pointer -= 1;
     }
 
-    fn pull_byte_stack(&mut self, interconnect: &Interconnect, register: CPURegister) {
+    fn pull_byte_stack(&mut self, interconnect: &Interconnect, ppu: &Ppu, register: CPURegister) {
         self.stack_pointer += 1;
         let addr = self.read_reg(CPURegister::StackPointer) as u16 + 0x100;
-        self.write_to_reg(register, interconnect.read_byte(addr));
+        self.write_to_reg(register, interconnect.read_byte(ppu, addr));
         self.set_flag(STACK_COPY);
     }
 
-    fn push_return_addr(&mut self, interconnect: &mut Interconnect) {
+    fn push_return_addr(&mut self, interconnect: &mut Interconnect, ppu: &mut Ppu) {
         let pc = self.pc + 2;
         let pc_msb = ((pc & 0xff00) >> 8) as u8;
         let pc_lsb = (pc & 0x00ff) as u8;
-        self.push_byte_stack(interconnect, pc_msb);
-        self.push_byte_stack(interconnect, pc_lsb);
+        self.push_byte_stack(interconnect, ppu, pc_msb);
+        self.push_byte_stack(interconnect, ppu, pc_lsb);
     }
 
-    fn pull_return_addr(&mut self, interconnect: &mut Interconnect) -> u16 {
+    fn pull_return_addr(&mut self, interconnect: &mut Interconnect, ppu: &Ppu) -> u16 {
         self.stack_pointer += 1;
         let addr = self.read_reg(CPURegister::StackPointer) as u16 + 0x100;
-        let pc_lsb = interconnect.read_byte(addr) as u16;
+        let pc_lsb = interconnect.read_byte(ppu, addr) as u16;
         self.stack_pointer += 1;
         let addr = self.read_reg(CPURegister::StackPointer) as u16 + 0x100;
-        let pc_msb = (interconnect.read_byte(addr) as u16) << 8;
+        let pc_msb = (interconnect.read_byte(ppu, addr) as u16) << 8;
         let ret_addr = pc_msb | pc_lsb;
         ret_addr + 1
     }
@@ -166,13 +167,12 @@ impl Cpu {
         }
     }
 
-    pub fn run_instr(&mut self, interconnect: &mut Interconnect) {
+    pub fn run_instr(&mut self, interconnect: &mut Interconnect, ppu: &mut Ppu) {
         use enum_primitive::FromPrimitive;
         use instructions::Instruction::*;
-        let raw_instr = interconnect.read_byte(self.pc);
+        let raw_instr = interconnect.read_byte(ppu, self.pc);
         let instr = Instruction::from_u8(raw_instr).unwrap_or_else(|| {
-            panic!("Unrecognized instruction: {:#x} Last Failure code: (02h): {:x} (03h): {:x}",
-                   raw_instr, interconnect.read_byte(0x02), interconnect.read_byte(0x03));
+            panic!("Unrecognized instruction: {:#x}", raw_instr)
         });
         println!("{:04X} {:?} \t A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYCLE: {:?}",
                  self.pc, instr, self.a, self.x, self.y, self.status, self.stack_pointer, self.cycles);
@@ -180,30 +180,30 @@ impl Cpu {
             // TODO: Implement unofficial opcodes
 
             BRK => {
-                self.interrupt(interconnect, Interrupt::BRK);
+                self.interrupt(interconnect, ppu, Interrupt::BRK);
                 7
             },
 
             // Stack    
             PHP => {
                 let byte = self.read_reg(CPURegister::Status);
-                self.push_byte_stack(interconnect, byte);
+                self.push_byte_stack(interconnect, ppu, byte);
                 self.set_flag(BRK_FLAG); self.bump_pc(1);
                 3
             },
             PLP => {
-                self.pull_byte_stack(interconnect, CPURegister::Status);
+                self.pull_byte_stack(interconnect, ppu, CPURegister::Status);
                 self.bump_pc(1);
                 4
             },
             PHA => {
                 let byte = self.read_reg(CPURegister::A);
-                self.push_byte_stack(interconnect, byte);
+                self.push_byte_stack(interconnect, ppu, byte);
                 self.bump_pc(1);
                 3
             },
             PLA => {
-                self.pull_byte_stack(interconnect, CPURegister::A);
+                self.pull_byte_stack(interconnect, ppu, CPURegister::A);
                 self.bump_pc(1);
                 if self.read_reg(CPURegister::A) & (1 << 7) != 0 {
                     self.set_flag(NEGATIVE_FLAG);
@@ -229,14 +229,14 @@ impl Cpu {
             },
 
             // Branch   
-            BPL => {self.branch(interconnect, BranchOn::Plus)},
-            BMI => {self.branch(interconnect, BranchOn::Minus)},
-            BVC => {self.branch(interconnect, BranchOn::OverflowClear)},
-            BVS => {self.branch(interconnect, BranchOn::OverflowSet)},
-            BCC => {self.branch(interconnect, BranchOn::CarryClear)},
-            BCS => {self.branch(interconnect, BranchOn::CarrySet)},
-            BNE => {self.branch(interconnect, BranchOn::NotEqual)},
-            BEQ => {self.branch(interconnect, BranchOn::Equal)},
+            BPL => {self.branch(interconnect, ppu, BranchOn::Plus)},
+            BMI => {self.branch(interconnect, ppu, BranchOn::Minus)},
+            BVC => {self.branch(interconnect, ppu, BranchOn::OverflowClear)},
+            BVS => {self.branch(interconnect, ppu, BranchOn::OverflowSet)},
+            BCC => {self.branch(interconnect, ppu, BranchOn::CarryClear)},
+            BCS => {self.branch(interconnect, ppu, BranchOn::CarrySet)},
+            BNE => {self.branch(interconnect, ppu, BranchOn::NotEqual)},
+            BEQ => {self.branch(interconnect, ppu, BranchOn::Equal)},
 
             // Flag instructions
             CLC => {self.unset_flag(CARRY_FLAG); self.bump_pc(1);2},
@@ -339,41 +339,41 @@ impl Cpu {
 
             // Compares
             CPYImm => {
-                let val = self.immediate(interconnect);
+                let val = self.immediate(interconnect, ppu);
                 self.compare(CPURegister::Y, val);
                 self.bump_pc(2);
                 2
             }, 
             CPYZPg=> {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::Y, val);
                 self.bump_pc(2);
                 3
             }, 
             CPYAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::Y, val);
                 self.bump_pc(3);
                 4
             }, 
             CPXImm => {
-                let val = self.immediate(interconnect);
+                let val = self.immediate(interconnect, ppu);
                 self.compare(CPURegister::X, val);
                 self.bump_pc(2);
                 2
             }, 
             CPXZPg=> {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::X, val);
                 self.bump_pc(2);
                 3
             }, 
             CPXAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::X, val);
                 self.bump_pc(3);
                 4
@@ -381,126 +381,126 @@ impl Cpu {
 
             // Loads
             LDAInxX=> {
-                let addr = self.indexed_indirect(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indexed_indirect(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::A, val);
                 self.bump_pc(2);
                 6
             }, 
             LDAZpg => {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::A, val);
                 self.bump_pc(2);
                 3
             }, 
             LDAImm => {
-                let val = self.immediate(interconnect);
+                let val = self.immediate(interconnect, ppu);
                 self.load(CPURegister::A, val);
                 self.bump_pc(2);
                 2
             }, 
             LDAAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::A, val);
                 self.bump_pc(3);
                 4
             }, 
             LDAIndY => {
-                let addr = self.indirect_indexed(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indirect_indexed(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::A, val);
                 self.bump_pc(2);
                 5
             }, 
             LDAZPgX   => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::X);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::A, val);
                 self.bump_pc(2);
                 4
             }, 
             LDAAx   => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::A, val);
                 self.bump_pc(3);
                 4
             }, 
             LDAAy   => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::Y);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::A, val);
                 self.bump_pc(3);
                 4
             }, 
 
             LDXImm => {
-                let val = self.immediate(interconnect);
+                let val = self.immediate(interconnect, ppu);
                 self.load(CPURegister::X, val);
                 self.bump_pc(2);
                 2
             },
             LDXZpg => {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::X, val);
                 self.bump_pc(2);
                 3
             },
             LDXAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::X, val);
                 self.bump_pc(3);
                 4
             }, 
             LDXZPgY  => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::Y);
-                let val = interconnect.read_byte(addr);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::Y);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::X, val);
                 self.bump_pc(2);
                 4
             }, 
             LDXAy  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::Y);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::X, val);
                 self.bump_pc(3);
                 4
             }, 
 
             LDYImm => {
-                let val = self.immediate(interconnect);
+                let val = self.immediate(interconnect, ppu);
                 self.load(CPURegister::Y, val);
                 self.bump_pc(2);
                 2
             },
             LDYZPg=> {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::Y, val);
                 self.bump_pc(2);
                 3
             }, 
             LDYAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::Y, val);
                 self.bump_pc(3);
                 4
             }, 
             LDYZPgX  => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::X);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::Y, val);
                 self.bump_pc(2);
                 4
             }, 
             LDYAx  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::Y, val);
                 self.bump_pc(3);
                 4
@@ -508,102 +508,102 @@ impl Cpu {
 
             // Stores
             STAInxX => {
-                let addr = self.indexed_indirect(interconnect);
-                self.store(interconnect, addr, CPURegister::A);
+                let addr = self.indexed_indirect(interconnect, ppu);
+                self.store(interconnect, ppu, addr, CPURegister::A);
                 self.bump_pc(2);
                 6
             }, 
             STAZpg => {
-                let addr = self.zero_page(interconnect);
-                self.store(interconnect, addr as u16, CPURegister::A);
+                let addr = self.zero_page(interconnect, ppu);
+                self.store(interconnect, ppu, addr as u16, CPURegister::A);
                 self.bump_pc(2);
                 3
             },
             STAAbs => {
-                let addr = self.absolute(interconnect);
-                self.store(interconnect, addr, CPURegister::A);
+                let addr = self.absolute(interconnect, ppu);
+                self.store(interconnect, ppu, addr, CPURegister::A);
                 self.bump_pc(3);
                 4
             },
             STAIndY => {
-                let addr = self.indirect_indexed(interconnect);
-                self.store(interconnect, addr, CPURegister::A);
+                let addr = self.indirect_indexed(interconnect, ppu);
+                self.store(interconnect, ppu, addr, CPURegister::A);
                 self.bump_pc(2);
                 6
             },
             STAZPgX  => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::X);
-                self.store(interconnect, addr, CPURegister::A);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::X);
+                self.store(interconnect, ppu, addr, CPURegister::A);
                 self.bump_pc(2);
                 4
             }, 
             STAAx  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::X);
-                self.store(interconnect, addr, CPURegister::A);
+                self.store(interconnect, ppu, addr, CPURegister::A);
                 self.bump_pc(3);
                 5
             },
             STAAy  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::Y);
-                self.store(interconnect, addr, CPURegister::A);
+                self.store(interconnect, ppu, addr, CPURegister::A);
                 self.bump_pc(3);
                 5
             }, 
 
             STXZpg => {
-                let addr = interconnect.read_byte(self.pc + 1);
-                self.store(interconnect, addr as u16, CPURegister::X);
+                let addr = interconnect.read_byte(ppu, self.pc + 1);
+                self.store(interconnect, ppu, addr as u16, CPURegister::X);
                 self.bump_pc(2);
                 3
             },
             STXAbs => {
                 let addr = interconnect.read_word(self.pc + 1);
-                self.store(interconnect, addr, CPURegister::X);
+                self.store(interconnect, ppu, addr, CPURegister::X);
                 self.bump_pc(3);
                 4
             },
             STXZPgY => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::Y);
-                self.store(interconnect, addr, CPURegister::X);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::Y);
+                self.store(interconnect, ppu, addr, CPURegister::X);
                 self.bump_pc(2);
                 4
             }, 
             STYZpg => {
-                let addr = interconnect.read_byte(self.pc + 1);
-                self.store(interconnect, addr as u16, CPURegister::Y);
+                let addr = interconnect.read_byte(ppu, self.pc + 1);
+                self.store(interconnect, ppu, addr as u16, CPURegister::Y);
                 self.bump_pc(2);
                 3
             },
             STYAbs => {
                 let addr = interconnect.read_word(self.pc + 1);
-                self.store(interconnect, addr as u16, CPURegister::Y);
+                self.store(interconnect, ppu, addr as u16, CPURegister::Y);
                 self.bump_pc(3);
                 4
             }, 
             STYZPgX => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::X);
-                self.store(interconnect, addr, CPURegister::Y);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::X);
+                self.store(interconnect, ppu, addr, CPURegister::Y);
                 self.bump_pc(2);
                 4
             }, 
 
             // Jumps
             JSRAbs => {
-                self.push_return_addr(interconnect);
+                self.push_return_addr(interconnect, ppu);
                 let addr = interconnect.read_word(self.pc + 1);
                 self.jmp(addr);
                 6
             },
             JMPAbs => {
-                let target_addr = self.absolute(interconnect);
+                let target_addr = self.absolute(interconnect, ppu);
                 self.jmp(target_addr);
                 3
             },
             JMPInd => {
                 let addr = interconnect.read_word(self.pc + 1);
                 if addr & 0x00ff == 0xff {
-                    let target_addr = interconnect.read_byte(addr) as u16 |
-                    ((interconnect.read_byte(addr + 1 - 0x100) as u16) << 8);
+                    let target_addr = interconnect.read_byte(ppu, addr) as u16 |
+                    ((interconnect.read_byte(ppu, (addr + 1 - 0x100)) as u16) << 8);
                     self.jmp(target_addr);
                 } else {
                     let target_addr = interconnect.read_word(addr);
@@ -613,28 +613,28 @@ impl Cpu {
             },
             
             RTI     => {
-                self.pull_byte_stack(interconnect, CPURegister::Status);
-                let ret_addr = self.pull_return_addr(interconnect) - 1;
+                self.pull_byte_stack(interconnect, ppu, CPURegister::Status);
+                let ret_addr = self.pull_return_addr(interconnect, ppu) - 1;
                 self.jmp(ret_addr);
                 6
             }, 
             RTS => {
-                let ret_addr = self.pull_return_addr(interconnect);
+                let ret_addr = self.pull_return_addr(interconnect, ppu);
                 self.jmp(ret_addr);
                 6
             },
 
             // Bit tests
             BITZpg => {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.bit(val);
                 self.bump_pc(2);
                 3
             },
             BITAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.bit(val);
                 self.bump_pc(3);
                 4
@@ -642,343 +642,343 @@ impl Cpu {
 
             // ALU operations
             ORAInxX => {
-                let addr = self.indexed_indirect(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indexed_indirect(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val | accumulator});
                 self.bump_pc(2);
                 6
             }, 
             ORAZPg=> {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val | accumulator});
                 self.bump_pc(2);
                 3
             }, 
             ORAImm => {
-                let val = self.immediate(interconnect);
+                let val = self.immediate(interconnect, ppu);
                 self.logic_op(val, |val, accumulator|{val | accumulator});
                 self.bump_pc(2);
                 2
             },
             ORAAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val | accumulator});
                 self.bump_pc(3);
                 4
             }, 
             ORAIndY => {
-                let addr = self.indirect_indexed(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indirect_indexed(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val | accumulator});
                 self.bump_pc(2);
                 5
             }, 
             ORAZPgX  => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::X);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val | accumulator});
                 self.bump_pc(2);
                 4
             }, 
             ORAAx  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val | accumulator});
                 self.bump_pc(3);
                 4
             }, 
             ORAAy  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::Y);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val | accumulator});
                 self.bump_pc(3);
                 4
             }, 
 
             ANDInxX => {
-                let addr = self.indexed_indirect(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indexed_indirect(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val & accumulator});
                 self.bump_pc(2);
                 6
             }, 
             ANDZPg=> {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val & accumulator});
                 self.bump_pc(2);
                 3
             }, 
             ANDImm => {
-                let val = self.immediate(interconnect);
+                let val = self.immediate(interconnect, ppu);
                 self.logic_op(val, |val, accumulator|{val & accumulator});
                 self.bump_pc(2);
                 2
             },
             ANDAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val & accumulator});
                 self.bump_pc(3);
                 4
             }, 
             ANDIndY => {
-                let addr = self.indirect_indexed(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indirect_indexed(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val & accumulator});
                 self.bump_pc(2);
                 5
             }, 
             ANDZPgX  => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::X);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val & accumulator});
                 self.bump_pc(2);
                 4
             }, 
             ANDAx  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val & accumulator});
                 self.bump_pc(3);
                 4
             }, 
             ANDAy  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::Y);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val & accumulator});
                 self.bump_pc(3);
                 4
             }, 
 
             EORInxX => {
-                let addr = self.indexed_indirect(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indexed_indirect(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val ^ accumulator});
                 self.bump_pc(2);
                 6
             }, 
             EORZPg=> {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val ^ accumulator});
                 self.bump_pc(2);
                 3
             }, 
             EORImm => {
-                let val = self.immediate(interconnect);
+                let val = self.immediate(interconnect, ppu);
                 self.logic_op(val, |val, accumulator|{val ^ accumulator});
                 self.bump_pc(2);
                 2
             }, 
             EORAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val ^ accumulator});
                 self.bump_pc(3);
                 4
             }, 
             EORIndY => {
-                let addr = self.indirect_indexed(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indirect_indexed(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val ^ accumulator});
                 self.bump_pc(2);
                 5
             }, 
             EORZPgX  => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::X);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val ^ accumulator});
                 self.bump_pc(2);
                 4
             }, 
             EORAx  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val ^ accumulator});
                 self.bump_pc(3);
                 4
             }, 
             EORAy  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::Y);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val ^ accumulator});
                 self.bump_pc(3);
                 4
             }, 
 
             ADCInxX => {
-                let addr = self.indexed_indirect(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indexed_indirect(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.add(val);
                 self.bump_pc(2);
                 6
             }, 
             ADCZPg=> {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.add(val);
                 self.bump_pc(2);
                 3
             }, 
             ADCImm => {
-                let val = self.immediate(interconnect);
+                let val = self.immediate(interconnect, ppu);
                 self.add(val);
                 self.bump_pc(2);
                 2
             },
             ADCAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.add(val);
                 self.bump_pc(3);
                 4
             }, 
             ADCIndY => {
-                let addr = self.indirect_indexed(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indirect_indexed(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.add(val);
                 self.bump_pc(2);
                 5
             }, 
             ADCZPgX  => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::X);
+                let val = interconnect.read_byte(ppu, addr);
                 self.add(val);
                 self.bump_pc(2);
                 4
             }, 
             ADCAx  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.add(val);
                 self.bump_pc(3);
                 4
             }, 
             ADCAy  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::Y);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.add(val);
                 self.bump_pc(3);
                 4
             }, 
 
             CMPInxX => {
-                let addr = self.indexed_indirect(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indexed_indirect(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::A, val);
                 self.bump_pc(2);
                 6
             },
             CMPZPg=> {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::A, val);
                 self.bump_pc(2);
                 3
             }, 
             CMPImm => {
-                let val = self.immediate(interconnect);
+                let val = self.immediate(interconnect, ppu);
                 self.compare(CPURegister::A, val);
                 self.bump_pc(2);
                 2
             }, 
             CMPAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::A, val);
                 self.bump_pc(3);
                 4
             }, 
             CMPIndY => {
-                let addr = self.indirect_indexed(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indirect_indexed(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::A, val);
                 self.bump_pc(2);
                 5
             },
             CMPZPgX  => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::X);
+                let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::A, val);
                 self.bump_pc(2);
                 4
             }, 
             CMPAx  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::A, val);
                 self.bump_pc(3);
                 4
             }, 
             CMPAy  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::Y);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::A, val);
                 self.bump_pc(3);
                 4
             }, 
 
             SBCInxX=> {
-                let addr = self.indexed_indirect(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indexed_indirect(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.sub(val);
                 self.bump_pc(2);
                 6
             }, 
             SBCZPg=> {
-                let addr = self.zero_page(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.zero_page(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.sub(val);
                 self.bump_pc(2);
                 3
             }, 
             SBCImm => {
-                let val = self.immediate(interconnect);
+                let val = self.immediate(interconnect, ppu);
                 self.sub(val);
                 self.bump_pc(2);
                 2
             }, 
             SBCAbs => {
-                let addr = self.absolute(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.absolute(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.sub(val);
                 self.bump_pc(3);
                 4
             }, 
             SBCIndY => {
-                let addr = self.indirect_indexed(interconnect);
-                let val = interconnect.read_byte(addr);
+                let addr = self.indirect_indexed(interconnect, ppu);
+                let val = interconnect.read_byte(ppu, addr);
                 self.sub(val);
                 self.bump_pc(2);
                 5
             }, 
             SBCZPgX  => {
-                let addr = self.z_page_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let addr = self.z_page_indexed(interconnect, ppu, CPURegister::X);
+                let val = interconnect.read_byte(ppu, addr);
                 self.sub(val);
                 self.bump_pc(2);
                 4
             }, 
             SBCAx  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::X);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.sub(val);
                 self.bump_pc(3);
                 4
             }, 
             SBCAy  => {
                 let addr = self.absolute_indexed(interconnect, CPURegister::Y);
-                let val = interconnect.read_byte(addr);
+                let val = interconnect.read_byte(ppu, addr);
                 self.sub(val);
                 self.bump_pc(3);
                 4
             }, 
                  
             ASLZPg => {
-                self.asl(interconnect, AddressingMode::ZeroPage);
+                self.asl(interconnect, ppu, AddressingMode::ZeroPage);
                 self.bump_pc(2);
                 5
             }
@@ -1004,23 +1004,23 @@ impl Cpu {
                 2
             }, 
             ASLAbs => {
-                self.asl(interconnect, AddressingMode::Absolute);
+                self.asl(interconnect, ppu, AddressingMode::Absolute);
                 self.bump_pc(3);
                 6
             }, 
             ASLZPgX  => {
-                self.asl(interconnect, AddressingMode::ZeroPageIndexed);
+                self.asl(interconnect, ppu, AddressingMode::ZeroPageIndexed);
                 self.bump_pc(2);
                 6
             }, 
             ASLAx  => {
-                self.asl(interconnect, AddressingMode::AbsoluteIndexed);
+                self.asl(interconnect, ppu, AddressingMode::AbsoluteIndexed);
                 self.bump_pc(3);
                 7
             }, 
             
             LSRZPg => {
-                self.lsr(interconnect, AddressingMode::ZeroPage);
+                self.lsr(interconnect, ppu, AddressingMode::ZeroPage);
                 self.bump_pc(2);
                 5
             }, 
@@ -1047,24 +1047,24 @@ impl Cpu {
                 2
             }, 
             LSRAbs => {
-                self.lsr(interconnect, AddressingMode::Absolute);
+                self.lsr(interconnect, ppu, AddressingMode::Absolute);
                 self.bump_pc(3);
                 6
             }, 
             LSRZPgX  => {
-                self.lsr(interconnect, AddressingMode::ZeroPageIndexed);
+                self.lsr(interconnect, ppu, AddressingMode::ZeroPageIndexed);
                 self.bump_pc(2);
                 6
             }, 
             LSRAx  => {
-                self.lsr(interconnect, AddressingMode::AbsoluteIndexed);
+                self.lsr(interconnect, ppu, AddressingMode::AbsoluteIndexed);
                 self.bump_pc(3);
                 7
             }, 
             
             // Rotates
             ROLZPg=> {
-                self.rol(interconnect, AddressingMode::ZeroPage);
+                self.rol(interconnect, ppu, AddressingMode::ZeroPage);
                 self.bump_pc(2);
                 5
             },
@@ -1092,23 +1092,23 @@ impl Cpu {
                 2
             }, 
             ROLAbs => {
-                self.rol(interconnect, AddressingMode::Absolute);
+                self.rol(interconnect, ppu, AddressingMode::Absolute);
                 self.bump_pc(3);
                 6
             }, 
             ROLZPgX  => {
-                self.rol(interconnect, AddressingMode::ZeroPageIndexed);
+                self.rol(interconnect, ppu, AddressingMode::ZeroPageIndexed);
                 self.bump_pc(2);
                 6
             }, 
             ROLAx  => {
-                self.rol(interconnect, AddressingMode::AbsoluteIndexed);
+                self.rol(interconnect, ppu, AddressingMode::AbsoluteIndexed);
                 self.bump_pc(3);
                 7
             }, 
 
             RORZPg=> {
-                self.ror(interconnect, AddressingMode::ZeroPage);
+                self.ror(interconnect, ppu, AddressingMode::ZeroPage);
                 self.bump_pc(2);
                 5
             }, 
@@ -1132,60 +1132,60 @@ impl Cpu {
                 2
             }, 
             RORAbs => {
-                self.ror(interconnect, AddressingMode::Absolute);
+                self.ror(interconnect, ppu, AddressingMode::Absolute);
                 self.bump_pc(3);
                 6
             }, 
             RORZPgX  => {
-                self.ror(interconnect, AddressingMode::ZeroPageIndexed);
+                self.ror(interconnect, ppu, AddressingMode::ZeroPageIndexed);
                 self.bump_pc(2);
                 6
             }, 
             RORAx  => {
-                self.ror(interconnect, AddressingMode::AbsoluteIndexed);
+                self.ror(interconnect, ppu, AddressingMode::AbsoluteIndexed);
                 self.bump_pc(3);
                 7
             }, 
 
             // Increments
             DECZpg => {
-                self.decrement(interconnect, AddressingMode::ZeroPage);
+                self.decrement(interconnect, ppu, AddressingMode::ZeroPage);
                 self.bump_pc(2);
                 5
             },
             DECAbs => {
-                self.decrement(interconnect, AddressingMode::Absolute);
+                self.decrement(interconnect, ppu, AddressingMode::Absolute);
                 self.bump_pc(3);
                 6
             }, 
             DECZPgX  => {
-                self.decrement(interconnect, AddressingMode::ZeroPageIndexed);
+                self.decrement(interconnect, ppu, AddressingMode::ZeroPageIndexed);
                 self.bump_pc(2);
                 6
             }, 
             DECAx  => {
-                self.decrement(interconnect, AddressingMode::AbsoluteIndexed);
+                self.decrement(interconnect, ppu, AddressingMode::AbsoluteIndexed);
                 self.bump_pc(3);
                 7
             }, 
 
             INCZPg=> {
-                self.increment(interconnect, AddressingMode::ZeroPage);
+                self.increment(interconnect, ppu, AddressingMode::ZeroPage);
                 self.bump_pc(2);
                 5
             }, 
             INCAbs => {
-                self.increment(interconnect, AddressingMode::Absolute);
+                self.increment(interconnect, ppu, AddressingMode::Absolute);
                 self.bump_pc(3);
                 6
             }, 
             INCZPgX  => {
-                self.increment(interconnect, AddressingMode::ZeroPageIndexed);
+                self.increment(interconnect, ppu, AddressingMode::ZeroPageIndexed);
                 self.bump_pc(2);
                 6
             }, 
             INCAx  => {
-                self.increment(interconnect, AddressingMode::AbsoluteIndexed);
+                self.increment(interconnect, ppu, AddressingMode::AbsoluteIndexed);
                 self.bump_pc(3);
                 7
             }, 
@@ -1197,16 +1197,16 @@ impl Cpu {
     }
 
     // Addressing modes
-    fn immediate(&self, interconnect: &Interconnect) -> u8 {
-        interconnect.read_byte(self.pc + 1)
+    fn immediate(&self, interconnect: &Interconnect, ppu: &Ppu) -> u8 {
+        interconnect.read_byte(ppu, self.pc + 1)
     }
 
-    fn absolute(&self, interconnect: &Interconnect) -> u16 {
+    fn absolute(&self, interconnect: &Interconnect, ppu: &Ppu) -> u16 {
         interconnect.read_word(self.pc + 1)
     }
 
-    fn zero_page(&self, interconnect: &Interconnect) -> u16 {
-        interconnect.read_byte(self.pc + 1) as u16
+    fn zero_page(&self, interconnect: &Interconnect, ppu: &Ppu) -> u16 {
+        interconnect.read_byte(ppu, self.pc + 1) as u16
     }
 
     // TODO: Check for CPURegister::{X or Y}
@@ -1216,28 +1216,28 @@ impl Cpu {
     }
 
     // TODO: Check for CPURegister::{X or Y}
-    fn z_page_indexed(&self, interconnect: &Interconnect, register: CPURegister) -> u16 {
-        let addr = interconnect.read_byte(self.pc + 1);
+    fn z_page_indexed(&self, interconnect: &Interconnect, ppu: &Ppu, register: CPURegister) -> u16 {
+        let addr = interconnect.read_byte(ppu, self.pc + 1);
         addr.wrapping_add(self.read_reg(register)) as u16
     }
 
     // PRETTIFYME
-    fn indexed_indirect(&self, interconnect: &Interconnect) -> u16 {
-        let addr = interconnect.read_byte(self.pc + 1);
+    fn indexed_indirect(&self, interconnect: &Interconnect, ppu: &Ppu) -> u16 {
+        let addr = interconnect.read_byte(ppu, self.pc + 1);
         let sum_addr = addr.wrapping_add((self.read_reg(CPURegister::X))) as u16;
         if sum_addr == 0xff {
-            (interconnect.read_byte(sum_addr) as u16) |
-            ((interconnect.read_byte(0x0000) as u16) << 8)
+            (interconnect.read_byte(ppu, sum_addr) as u16) |
+            ((interconnect.read_byte(ppu, 0x0000) as u16) << 8)
         } else {
             interconnect.read_word(sum_addr as u16)
         }
     }
 
-    fn indirect_indexed(&self, interconnect: &Interconnect) -> u16 {
-        let temp_addr = interconnect.read_byte(self.pc + 1) as u16;
+    fn indirect_indexed(&self, interconnect: &Interconnect, ppu: &Ppu) -> u16 {
+        let temp_addr = interconnect.read_byte(ppu, self.pc + 1) as u16;
         if temp_addr == 0xff {
-            let addr = interconnect.read_byte(temp_addr) as u16 |
-            ((interconnect.read_byte(0x0000) as u16) << 8);
+            let addr = interconnect.read_byte(ppu, temp_addr) as u16 |
+            ((interconnect.read_byte(ppu, 0x0000) as u16) << 8);
             addr.wrapping_add(self.read_reg(CPURegister::Y) as u16)
         } else {
             let addr = interconnect.read_word(temp_addr);
@@ -1265,16 +1265,16 @@ impl Cpu {
         self.write_to_reg(CPURegister::A, sum as u8);
     }
 
-    fn asl(&mut self, interconnect: &mut Interconnect, am: AddressingMode) {
+    fn asl(&mut self, interconnect: &mut Interconnect, ppu: &mut Ppu, am: AddressingMode) {
         use self::AddressingMode::*;
         let addr = match am {
-            ZeroPage => {self.zero_page(interconnect)},
-            ZeroPageIndexed => {self.z_page_indexed(interconnect, CPURegister::X)},
-            Absolute => {self.absolute(interconnect)},
+            ZeroPage => {self.zero_page(interconnect, ppu)},
+            ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
+            Absolute => {self.absolute(interconnect, ppu)},
             AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("ASL with unsupported Addressing Mode: {:?}", am),
         };
-        let mut val = interconnect.read_byte(addr);
+        let mut val = interconnect.read_byte(ppu, addr);
         if val & (1 << 7) != 0 {
             self.set_flag(CARRY_FLAG);
         } else {
@@ -1291,7 +1291,7 @@ impl Cpu {
         } else {
             self.unset_flag(ZERO_FLAG);
         };
-        interconnect.write_byte(addr, val);
+        interconnect.write_byte(ppu, addr, val);
     }
 
     fn bit(&mut self, arg: u8) {
@@ -1308,8 +1308,8 @@ impl Cpu {
         }
     }
 
-    fn branch(&mut self, interconnect: &Interconnect, branch_on: BranchOn) -> u64{
-        let branch_target = interconnect.read_byte(self.pc + 1) as i8;
+    fn branch(&mut self, interconnect: &Interconnect, ppu: &Ppu, branch_on: BranchOn) -> u64{
+        let branch_target = interconnect.read_byte(ppu, self.pc + 1) as i8;
         let pc = self.pc + 2;
         let branch = match branch_on {
             BranchOn::Plus => {!self.check_flag(NEGATIVE_FLAG)},
@@ -1344,15 +1344,15 @@ impl Cpu {
         }
     }
 
-    fn decrement(&mut self, interconnect: &mut Interconnect, am: AddressingMode) {
+    fn decrement(&mut self, interconnect: &mut Interconnect, ppu: &mut Ppu, am: AddressingMode) {
         let addr = match am {
-            AddressingMode::ZeroPage => {self.zero_page(interconnect)},
-            AddressingMode::ZeroPageIndexed => {self.z_page_indexed(interconnect, CPURegister::X)},
-            AddressingMode::Absolute => {self.absolute(interconnect)},
+            AddressingMode::ZeroPage => {self.zero_page(interconnect, ppu)},
+            AddressingMode::ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
+            AddressingMode::Absolute => {self.absolute(interconnect, ppu)},
             AddressingMode::AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("Decrement with unsupported Addressing Mode: {:?}", am),
         };
-        let temp_val = interconnect.read_byte(addr);
+        let temp_val = interconnect.read_byte(ppu, addr);
         let val = temp_val.wrapping_sub(1);
         if val > temp_val {
             self.set_flag(OVERFLOW_FLAG);
@@ -1369,18 +1369,18 @@ impl Cpu {
         } else {
             self.unset_flag(ZERO_FLAG);
         };
-        interconnect.write_byte(addr, val);
+        interconnect.write_byte(ppu, addr, val);
     }
 
-    fn increment(&mut self, interconnect: &mut Interconnect, am: AddressingMode) {
+    fn increment(&mut self, interconnect: &mut Interconnect, ppu: &mut Ppu, am: AddressingMode) {
         let addr = match am {
-            AddressingMode::ZeroPage => {self.zero_page(interconnect)},
-            AddressingMode::ZeroPageIndexed => {self.z_page_indexed(interconnect, CPURegister::X)},
-            AddressingMode::Absolute => {self.absolute(interconnect)},
+            AddressingMode::ZeroPage => {self.zero_page(interconnect, ppu)},
+            AddressingMode::ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
+            AddressingMode::Absolute => {self.absolute(interconnect, ppu)},
             AddressingMode::AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("Increment with unsupported Addressing Mode: {:?}", am),
         };
-        let temp_val = interconnect.read_byte(addr);
+        let temp_val = interconnect.read_byte(ppu, addr);
         let val = temp_val.wrapping_add(1);
         if val < temp_val {
             self.set_flag(OVERFLOW_FLAG);
@@ -1397,7 +1397,7 @@ impl Cpu {
         } else {
             self.unset_flag(ZERO_FLAG);
         };
-        interconnect.write_byte(addr, val);
+        interconnect.write_byte(ppu, addr, val);
     }
 
     fn jmp(&mut self, jump_target: u16) {
@@ -1434,16 +1434,16 @@ impl Cpu {
         };
     }
 
-    fn lsr(&mut self, interconnect: &mut Interconnect, am: AddressingMode) {
+    fn lsr(&mut self, interconnect: &mut Interconnect, ppu: &mut Ppu, am: AddressingMode) {
         use self::AddressingMode::*;
         let addr = match am {
-            ZeroPage => {self.zero_page(interconnect)},
-            ZeroPageIndexed => {self.z_page_indexed(interconnect, CPURegister::X)},
-            Absolute => {self.absolute(interconnect)},
+            ZeroPage => {self.zero_page(interconnect, ppu)},
+            ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
+            Absolute => {self.absolute(interconnect, ppu)},
             AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("LSR with unsupported Addressing Mode: {:?}", am),
         };
-        let mut val = interconnect.read_byte(addr);
+        let mut val = interconnect.read_byte(ppu, addr);
         if val & (1 << 0) != 0 {
             self.set_flag(CARRY_FLAG);
         } else {
@@ -1460,7 +1460,7 @@ impl Cpu {
         } else {
             self.unset_flag(ZERO_FLAG);
         };
-        interconnect.write_byte(addr, val);
+        interconnect.write_byte(ppu, addr, val);
     }
 
     fn transfer(&mut self, from_reg: CPURegister, to_reg: CPURegister) {
@@ -1480,16 +1480,16 @@ impl Cpu {
         }
     }
 
-    fn rol(&mut self, interconnect: &mut Interconnect, am: AddressingMode) {
+    fn rol(&mut self, interconnect: &mut Interconnect, ppu: &mut Ppu, am: AddressingMode) {
         use self::AddressingMode::*;
         let addr = match am {
-            ZeroPage => {self.zero_page(interconnect)},
-            ZeroPageIndexed => {self.z_page_indexed(interconnect, CPURegister::X)},
-            Absolute => {self.absolute(interconnect)},
+            ZeroPage => {self.zero_page(interconnect, ppu)},
+            ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
+            Absolute => {self.absolute(interconnect, ppu)},
             AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("ROL with unsupported Addressing Mode: {:?}", am),
         };
-        let mut val = interconnect.read_byte(addr);
+        let mut val = interconnect.read_byte(ppu, addr);
         let carry = if self.check_flag(CARRY_FLAG) {1} else {0};
         if val & (1 << 7) != 0 {
             self.set_flag(CARRY_FLAG);
@@ -1507,19 +1507,19 @@ impl Cpu {
         } else {
             self.unset_flag(ZERO_FLAG);
         };
-        interconnect.write_byte(addr, val);
+        interconnect.write_byte(ppu, addr, val);
     }
 
-    fn ror(&mut self, interconnect: &mut Interconnect, am: AddressingMode) {
+    fn ror(&mut self, interconnect: &mut Interconnect, ppu: &mut Ppu, am: AddressingMode) {
         use self::AddressingMode::*;
         let addr = match am {
-            ZeroPage => {self.zero_page(interconnect)},
-            ZeroPageIndexed => {self.z_page_indexed(interconnect, CPURegister::X)},
-            Absolute => {self.absolute(interconnect)},
+            ZeroPage => {self.zero_page(interconnect, ppu)},
+            ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
+            Absolute => {self.absolute(interconnect, ppu)},
             AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("ROR with unsupported Addressing Mode: {:?}", am),
         };
-        let mut val = interconnect.read_byte(addr);
+        let mut val = interconnect.read_byte(ppu, addr);
         let carry = if self.check_flag(CARRY_FLAG) {1 << 7} else {0};
         if val & (1 << 0) != 0 {
             self.set_flag(CARRY_FLAG);
@@ -1537,26 +1537,26 @@ impl Cpu {
         } else {
             self.unset_flag(ZERO_FLAG);
         };
-        interconnect.write_byte(addr, val);
+        interconnect.write_byte(ppu, addr, val);
     }
 
-    fn store(&mut self, interconnect: &mut Interconnect, addr: u16, register: CPURegister) {
+    fn store(&mut self, interconnect: &mut Interconnect, ppu: &mut Ppu, addr: u16, register: CPURegister) {
         let val = self.read_reg(register);
-        interconnect.write_byte(addr, val);
+        interconnect.write_byte(ppu, addr, val);
     }
 
     fn sub(&mut self, arg: u8) {
         self.add(!arg);
     }
 
-    pub fn interrupt(&mut self, interconnect: &mut Interconnect, interrupt: Interrupt) {
+    pub fn interrupt(&mut self, interconnect: &mut Interconnect, ppu: &mut Ppu, interrupt: Interrupt) {
         self.bump_pc(2);
         self.set_flag(IRQ_INHIBIT_FLAG);
         self.unset_flag(BRK_FLAG);
         let status = self.read_reg(CPURegister::Status);
         self.set_flag(IRQ_INHIBIT_FLAG);
-        self.push_return_addr(interconnect);
-        self.push_byte_stack(interconnect, status);
+        self.push_return_addr(interconnect, ppu);
+        self.push_byte_stack(interconnect, ppu, status);
 
         let branch_target = match interrupt {
             Interrupt::BRK => {

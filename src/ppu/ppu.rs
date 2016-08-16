@@ -1,4 +1,5 @@
 use std::fmt;
+use mapper::Mapper;
 
 const SCREEN_WIDTH: usize = 256;
 const SCREEN_HEIGHT: usize = 240;
@@ -41,7 +42,7 @@ enum Scanline {
     VBlank,
 }
 
-struct Vram {
+/* struct Vram {
     palette: [u8; 0x20],
     pattern_tables: [u8; 0x20],
     name_tables: [u8; 0x800],
@@ -56,7 +57,7 @@ impl Vram {
             name_tables: [0; 0x800],
         }
     }
-}
+} */
 
 pub struct Ppu {
     ppuctrl: u8,
@@ -69,17 +70,16 @@ pub struct Ppu {
     ppudata: u8,
     oamdma: u8,
 
-    vram: Vram,
-    oam: Box<[u8; 0xff]>,
+    // vram: Vram,
+    // oam: Box<[u8; 0xff]>,
 
     cycles: u64,
     scanline: Scanline,
     pub frame: Box<[u8; SCREEN_WIDTH*SCREEN_HEIGHT*3]>,
-    mirroring: u8,
 }
 
 impl Ppu {
-    pub fn new(cart_rom: &Vec<u8>) -> Ppu {
+    pub fn new() -> Ppu {
         Ppu {
             ppuctrl: 0,
             ppumask: 0,
@@ -91,13 +91,12 @@ impl Ppu {
             ppudata: 0,
             oamdma: 0,
 
-            vram: Vram::new(cart_rom),
-            oam: Box::new([0u8; 0xff]),
+            // vram: Vram::new(cart_rom),
+            // oam: Box::new([0u8; 0xff]),
 
             cycles: 0,
             scanline: Scanline::PreRender,
             frame: Box::new([0u8; SCREEN_WIDTH*SCREEN_HEIGHT*3]),
-            mirroring: (cart_rom[6] & 1<<0) | (cart_rom[6] & 1<<3),
         }
     }
     

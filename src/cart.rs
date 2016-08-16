@@ -5,12 +5,6 @@ pub struct Cartridge {
     pub mapper: Box<Mapper>,
 }
 
-pub enum Mirroring {
-    Horizontal,
-    Vertical,
-    FourWay,
-}
-
 pub struct RomHeader {
     pub prg_rom_size: u8, // In 16kB units
     pub prg_ram_size: u8, // In 8kB units
@@ -18,6 +12,13 @@ pub struct RomHeader {
     pub mapper_number: u8,
     pub batt_ram: bool,
     pub trainer: bool,
+    pub mirroring: Mirroring,
+}
+
+pub enum Mirroring {
+    Vertical,
+    Horizontal,
+    FourWay,
 }
 
 fn read_rom_header(cart_rom: &Vec<u8>) -> RomHeader {
@@ -28,6 +29,16 @@ fn read_rom_header(cart_rom: &Vec<u8>) -> RomHeader {
         mapper_number: (cart_rom[6] & 0xf0) >> 4 | cart_rom[7] & 0xf0,
         batt_ram: (cart_rom[6] & (1 << 1)) != 0,
         trainer: (cart_rom[6] & (1 << 2)) != 0,
+        mirroring: mirroring((cart_rom[6] & 1<<0) | (cart_rom[6] & 1<<3)),
+    }
+}
+
+fn mirroring(mirror_bytes: u8) -> Mirroring {
+    match mirror_bytes {
+        0b0000 => { Mirroring::Vertical },
+        0b0001 => { Mirroring::Horizontal },
+        0b1000 | 0b1001 => { Mirroring::FourWay },
+        _ => unreachable!(),
     }
 }
 
@@ -54,4 +65,3 @@ impl Cartridge  {
         }
     }
 }
-

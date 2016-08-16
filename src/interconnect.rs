@@ -1,3 +1,10 @@
+/* I would like to completely refactor this. The way ownership
+ * currently works is obnoxious and makes the code difficult to read.
+ * Perhaps making the Interconnect have references to the APU and
+ * the PPU would be more sane.
+ */
+
+
 use super::apu::Apu;
 use super::ppu::ppu::Ppu;
 use super::mapper::*;
@@ -6,7 +13,7 @@ use super::cart::Cartridge;
 pub struct Interconnect {
     pub ram: Box<[u8]>,
     apu: Apu,
-    pub ppu: Ppu,
+    // pub ppu: Ppu<'a>,
     cart: Cartridge,
 }
 
@@ -18,18 +25,17 @@ impl Interconnect {
             apu: Apu::default(),
             // The interconnect owns the ppu so the cpu can more easily address it.
             // In turn, the PPU owns it's own VRAM
-            ppu: Ppu::new(cart_rom), 
+            // ppu: Ppu::new(cart_rom), 
             cart: Cartridge::new(cart_rom),
         }
     }
 
     pub fn power_up(&mut self, cart_rom: Vec<u8>) {
         self.cart.mapper.load_rom(cart_rom);
-        self.ppu.power_up();
     }
 
     // PRETTIFYME: Get rid of magic constants
-    pub fn read_byte(&self, virt_addr: u16) -> u8 {
+    pub fn read_byte(&self, ppu: &Ppu, virt_addr: u16) -> u8 {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
         match phys_addr {
@@ -37,15 +43,15 @@ impl Interconnect {
             PhysAddr::RamMirrorOne(addr) => {self.ram[(addr - 0x0800) as usize]},
             PhysAddr::RamMirrorTwo(addr) => {self.ram[(addr - 2 * 0x0800) as usize]},
             PhysAddr::RamMirrorThree(addr) => {self.ram[(addr - 3 * 0x0800) as usize]},
-            PhysAddr::PpuRegs(addr) => {self.ppu.read_reg(addr - 0x2000)},
-            PhysAddr::PpuMirrors(addr) => {self.ppu.read_reg((addr - 0x2000) % 8)},
+            PhysAddr::PpuRegs(addr) => {ppu.read_reg(addr - 0x2000)},
+            PhysAddr::PpuMirrors(addr) => {ppu.read_reg((addr - 0x2000) % 8)},
             PhysAddr::ApuRegs(addr) => {self.apu.read_reg(addr - 0x4000)},
             PhysAddr::CartSpace(addr) => {self.cart.read_cart(addr)},
         }
     }
 
     // PRETTIFYME: Get rid of magic constants
-    pub fn write_byte(&mut self, virt_addr: u16, val: u8) {
+    pub fn write_byte(&mut self, ppu: &mut Ppu, virt_addr: u16, val: u8) {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
         match phys_addr {
@@ -53,8 +59,8 @@ impl Interconnect {
             PhysAddr::RamMirrorOne(addr) => {self.ram[(addr - 0x0800) as usize] = val;},
             PhysAddr::RamMirrorTwo(addr) => {self.ram[(addr - 2 * 0x0800) as usize] = val;},
             PhysAddr::RamMirrorThree(addr) => {self.ram[(addr - 3 * 0x0800) as usize] = val;},
-            PhysAddr::PpuRegs(addr) => {self.ppu.write_to_reg(addr, val)},
-            PhysAddr::PpuMirrors(addr) => {self.ppu.write_to_reg(addr % 8, val)},
+            PhysAddr::PpuRegs(addr) => {ppu.write_to_reg(addr, val)},
+            PhysAddr::PpuMirrors(addr) => {ppu.write_to_reg(addr % 8, val)},
             PhysAddr::ApuRegs(addr) => {self.apu.write_to_reg(addr - 0x4000, val)},
             PhysAddr::CartSpace(addr) => {self.cart.write_byte_to_cart(addr, val);},
         }
