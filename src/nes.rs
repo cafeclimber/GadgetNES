@@ -19,7 +19,7 @@ pub struct Nes<'a> {
 }
 
 impl<'a> Nes<'a> {
-    pub fn new(cart_rom: &'a Vec<u8>, scale: ScreenSize) -> Nes<'a> {
+    pub fn new(cart_rom: &Vec<u8>, scale: ScreenSize) -> Nes<'a> {
         Nes {
             cpu: Cpu::new(),
             ppu: Ppu::new(),
