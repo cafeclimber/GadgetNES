@@ -1,4 +1,5 @@
 use super::mapper::*;
+use super::ppu::mem_map::*;
 
 // TODO: extract info
 pub struct Cartridge {
@@ -8,13 +9,14 @@ pub struct Cartridge {
 pub struct RomHeader {
     pub prg_rom_size: u8, // In 16kB units
     pub prg_ram_size: u8, // In 8kB units
-    pub chr_rom_size: u8, // If present, 8kB units
+    pub chr_mem_size: u8, // If present, 8kB units
     pub mapper_number: u8,
     pub batt_ram: bool,
     pub trainer: bool,
     pub mirroring: Mirroring,
 }
 
+#[derive(Clone, Copy)]
 pub enum Mirroring {
     Vertical,
     Horizontal,
@@ -25,7 +27,7 @@ fn read_rom_header(cart_rom: &Vec<u8>) -> RomHeader {
     RomHeader {
         prg_rom_size: cart_rom[4],
         prg_ram_size: if cart_rom[5] == 0 { 1 } else { cart_rom[5] }, // FIXME: CHR_ROM vs CHR_RAM
-        chr_rom_size: if cart_rom[8] == 0 { 1 } else { cart_rom[8] },
+        chr_mem_size: if cart_rom[8] == 0 { 1 } else { cart_rom[8] },
         mapper_number: (cart_rom[6] & 0xf0) >> 4 | cart_rom[7] & 0xf0,
         batt_ram: (cart_rom[6] & (1 << 1)) != 0,
         trainer: (cart_rom[6] & (1 << 2)) != 0,
@@ -56,6 +58,14 @@ impl Cartridge {
                 panic!("Attempt to read from unrecognized memory location: {:#x}",
                        addr)
             }
+        }
+    }
+
+    pub fn ppu_read_cart(&self, phys_addr: PhysAddr) -> u8 {
+        match phys_addr {
+            PhysAddr::PatternTable(addr) => self.mapper.get_pattern_table_byte(addr),
+            PhysAddr::NameTable(addr) => self.mapper.get_nametable_byte(addr),
+            PhysAddr::InternalPalette(addr) => self.mapper.get_palette_byte(addr),
         }
     }
 

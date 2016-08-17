@@ -1,10 +1,3 @@
-// I would like to completely refactor this. The way ownership
-// currently works is obnoxious and makes the code difficult to read.
-// Perhaps making the Interconnect have references to the APU and
-// the PPU would be more sane.
-//
-
-
 use super::apu::Apu;
 use super::ppu::ppu::Ppu;
 use super::mapper::*;
@@ -31,7 +24,7 @@ impl Interconnect {
     }
 
     // PRETTIFYME: Get rid of magic constants
-    pub fn read_byte(&self, ppu: &Ppu, virt_addr: u16) -> u8 {
+    pub fn cpu_read_byte(&self, ppu: &Ppu, virt_addr: u16) -> u8 {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
         match phys_addr {
@@ -46,8 +39,14 @@ impl Interconnect {
         }
     }
 
+    pub fn ppu_read_byte(&self, virt_addr: u16) -> u8 {
+        use super::ppu::mem_map::*;
+        let phys_addr = map_virt_addr(virt_addr);
+        self.cart.ppu_read_cart(phys_addr)
+    }
+
     // PRETTIFYME: Get rid of magic constants
-    pub fn write_byte(&mut self, ppu: &mut Ppu, virt_addr: u16, val: u8) {
+    pub fn cpu_write_byte(&mut self, ppu: &mut Ppu, virt_addr: u16, val: u8) {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
         match phys_addr {
@@ -73,7 +72,7 @@ impl Interconnect {
     }
 
     // PRETTIFYME: Get rid of magic constants
-    pub fn read_word(&self, virt_addr: u16) -> u16 {
+    pub fn cpu_read_word(&self, virt_addr: u16) -> u16 {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
         match phys_addr {
