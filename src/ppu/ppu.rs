@@ -152,39 +152,10 @@ impl Ppu {
     fn render_scanline(&mut self, interconnect: &mut Interconnect, line: u8) {
         // TODO: Refactor
         println!("################# Rendering scanline ##################: {:?}", self.scanline);
-        let mut ppu_cycle = 0;
-        while ppu_cycle < 341 {
-            match ppu_cycle {
-                0 => {
-                    ppu_cycle += 1;
-                    // println!("Pre-render cycle: {:?}", ppu_cycle);
-                },
-                1...256 => {
-                    let nm_byte = self.fetch_nametable_byte(&mut ppu_cycle);
-                    let attr_byte = self.fetch_attribute_byte(&mut ppu_cycle);
-                    let tile_bitmap = self.fetch_tile_bitmap(&mut ppu_cycle);
-                    // println!("Scanline rendering cycle: {:?}", ppu_cycle);
-                }, 
-                257...320 => {
-                    // This is done for accuracy. In the NES, these bytes are fetched, but unused
-                    self.fetch_nametable_byte(&mut ppu_cycle);
-                    self.fetch_attribute_byte(&mut ppu_cycle);
-                    let tile_bitmap = self.fetch_tile_bitmap(&mut ppu_cycle);
-                    // println!("Fetching sprites for nect scanline: {:?}", ppu_cycle);
-                },
-                321...336 => {
-                    let nm_byte = self.fetch_nametable_byte(&mut ppu_cycle);
-                    let attr_byte = self.fetch_attribute_byte(&mut ppu_cycle);
-                    let tile_bitmap = self.fetch_tile_bitmap(&mut ppu_cycle);
-                    // println!("Fetching first two tiles for next scanline: {:?}", ppu_cycle);
-                },
-                337...340 => {
-                    // This is done for accuracy. In the NES, these bytes are fetched, but unused
-                    self.fetch_nametable_byte(&mut ppu_cycle);
-                    self.fetch_nametable_byte(&mut ppu_cycle);
-                    // println!("Unused nametable fetches: {:?}", ppu_cycle);
-                },
-                _ => unreachable!(),
+        let mut background_buffer = 0u8;
+        for pixel in 0..SCREEN_WIDTH {
+            if pixel % 8 == 0 {
+                background_buffer = self.refresh_background_buffer(interconnect);
             }
         }
         self.cycles += CPU_CYCLES_PER_SCANLINE;
@@ -214,7 +185,7 @@ impl Ppu {
             }
             false => {
                 self.ppustatus &= !VBLANK_FLAG;   
-            }
+                }
         }
     }
 
@@ -226,17 +197,35 @@ impl Ppu {
         }
     }
 
-    fn fetch_nametable_byte(&mut self, interconnect: &Interconnect, ppu_cycle: &mut u16) -> u8 {
-        *ppu_cycle += 2;
-        interconnect.ppu_read_byte()
+    fn refresh_background_buffer(&mut self, interconnect: &Interconnect) -> u8 {
+        // TODO
+        0
     }
-    fn fetch_attribute_byte(&mut self, interconnect: &Interconnect, ppu_cycle: &mut u16) -> u8 {
-        *ppu_cycle += 2;
-        interconnect.ppu_read_byte()
+
+    fn fetch_nametable_byte(&mut self, interconnect: &Interconnect) -> u8 {
+        // TODO
+        let byte = interconnect.ppu_read_byte(0x2000) as u8;
+        println!("Fetched nametable byte: {:#X}", byte);
+        byte
     }
-    fn fetch_tile_bitmap(&mut self, interconnect: &Interconnect, ppu_cycle: &mut u16) -> u8 {
-        *ppu_cycle += 4;
-        interconnect.ppu_read_byte()
+    fn fetch_attribute_byte(&mut self, interconnect: &Interconnect) -> u8 {
+        // TODO
+        let byte = interconnect.ppu_read_byte(0) as u8;
+        println!("Fetched attribute byte: {:#X}", byte);
+        byte
+    }
+    fn fetch_tile_bitmap(&mut self, interconnect: &Interconnect) -> u16 {
+        // TODO
+        /* let addr = {
+            if self.ppuctrl & (1<<5) != 0 {
+                (self.ppuctrl & (1<<3)) | 
+            } else {
+                
+            }
+        } */
+        let bytes = interconnect.ppu_read_byte(0);
+        println!("Fetched tile bitmap bytes");
+        bytes as u16
     }
 }
 

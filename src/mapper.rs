@@ -1,5 +1,7 @@
 use super::cart::{RomHeader, Mirroring};
 
+const VRAM_SIZE: usize = 0x800;
+
 pub trait Mapper {
     // CPU Helpers
     fn prg_rom_read(&self, addr: u16) -> u8;
@@ -25,6 +27,7 @@ struct Mapper0 {
     prg_ram: Vec<u8>,
     prg_rom: Vec<u8>,
     chr_mem: Vec<u8>,
+    vram: Vec<u8>,
     mirroring: Mirroring,
 }
 
@@ -42,6 +45,9 @@ impl Mapper0 {
             chr_mem: {
                 let chr_mem_size = rom_header.chr_mem_size as usize * 8192;
                 vec![0; chr_mem_size]
+            },
+            vram: {
+                vec![0; VRAM_SIZE]
             },
             mirroring: rom_header.mirroring,
         }
@@ -80,11 +86,11 @@ impl Mapper for Mapper0 {
             Mirroring::Vertical => {
                 match addr {
                     // 0x2000 = 0x2800 and 0x2400 = 0x2c00
-                    0x2000...0x23ff => self.chr_mem[addr as usize],
-                    0x2800...0x2bff => self.chr_mem[(addr - 0x0800) as usize],
+                    0x2000...0x23ff => self.vram[(addr - 0x2000) as usize],
+                    0x2800...0x2bff => self.vram[(addr - 0x2000 - 0x0800) as usize],
 
-                    0x2400...0x27ff => self.chr_mem[addr as usize],
-                    0x2c00...0x2fff => self.chr_mem[(addr - 0x0800) as usize],
+                    0x2400...0x27ff => self.vram[(addr - 0x2000) as usize],
+                    0x2c00...0x2fff => self.vram[(addr - 0x2000 - 0x0800) as usize],
                     _ => {
                         panic!("Attempted to get pattern table byte from outside pattern table: \
                                 {:#X}",
@@ -95,11 +101,11 @@ impl Mapper for Mapper0 {
             Mirroring::Horizontal => {
                 match addr {
                     // 0x2000 = 0x2400 and 0x2800 = 0x2c00
-                    0x2000...0x23ff => self.chr_mem[addr as usize],
-                    0x2400...0x27ff => self.chr_mem[(addr - 0x0400) as usize],
+                    0x2000...0x23ff => self.vram[(addr - 0x2000) as usize],
+                    0x2400...0x27ff => self.vram[(addr - 0x2000 - 0x0400) as usize],
 
-                    0x2800...0x2bff => self.chr_mem[addr as usize],
-                    0x2c00...0x2fff => self.chr_mem[(addr - 0x0400) as usize],
+                    0x2800...0x2bff => self.vram[(addr - 0x2000) as usize],
+                    0x2c00...0x2fff => self.vram[(addr - 0x2000 - 0x0400) as usize],
                     _ => {
                         panic!("Attempted to get pattern table byte from outside pattern table: \
                                 {:#X}",
@@ -120,6 +126,6 @@ impl Mapper for Mapper0 {
 
     fn load_rom(&mut self, rom: Vec<u8>) {
         self.prg_rom = rom[16..16400].to_owned();
-        self.chr_mem = rom[16401..24594].to_owned(); // 8kB
+        self.chr_mem = rom[16400..24592].to_owned(); // 8kB
     }
 }
