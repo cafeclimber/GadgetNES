@@ -1,16 +1,11 @@
 use std::fmt;
-use mapper::Mapper;
+use super::super::interconnect::Interconnect;
 
 const SCREEN_WIDTH: usize = 256;
 const SCREEN_HEIGHT: usize = 240;
 const CPU_CYCLES_PER_SCANLINE: u64 = 114;
 const LAST_VISIBLE_SCANLINE: u8 = 239;
 const VBLANK_SCANLINES: u64 = 20;
-
-const IMG_SPR_MIRROR_BEG: u16 = 0x3f20;
-const IMG_SPR_MIRROR_END: u16 = 0x3fff;
-const MIRRORS_BEG: u16 = 0x4000;
-const MIRRORS_END: u16 = 0xffff;
 
 const VBLANK_FLAG: u8 = (1 << 7);
 
@@ -141,7 +136,7 @@ impl Ppu {
     }
 
     // Returns whether the NMI is currently allowed
-    pub fn step(&mut self, current_cpu_cycle: &u64) -> bool {
+    pub fn step(&mut self, interconnect: &mut Interconnect, current_cpu_cycle: &u64) -> bool {
         let mut vblank = false;
         while self.cycles < *current_cpu_cycle {
             match self.scanline {
@@ -150,7 +145,7 @@ impl Ppu {
                     vblank = false;
                 },
                 Scanline::Visible(line) => {
-                    self.render_scanline(line);
+                    self.render_scanline(interconnect, line);
                     vblank = false;
                 },
                 Scanline::PostRender => {
@@ -173,7 +168,7 @@ impl Ppu {
         self.cycles += CPU_CYCLES_PER_SCANLINE;
     }
 
-    fn render_scanline(&mut self, line: u8) {
+    fn render_scanline(&mut self, interconnect: &mut Interconnect, line: u8) {
         // TODO: Refactor
         println!("################# Rendering scanline ##################: {:?}", self.scanline);
         let mut ppu_cycle = 0;

@@ -352,7 +352,7 @@ impl Cpu {
                 3
             }, 
             CPYAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::Y, val);
                 self.bump_pc(3);
@@ -372,7 +372,7 @@ impl Cpu {
                 3
             }, 
             CPXAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::X, val);
                 self.bump_pc(3);
@@ -401,7 +401,7 @@ impl Cpu {
                 2
             }, 
             LDAAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::A, val);
                 self.bump_pc(3);
@@ -450,7 +450,7 @@ impl Cpu {
                 3
             },
             LDXAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::X, val);
                 self.bump_pc(3);
@@ -485,7 +485,7 @@ impl Cpu {
                 3
             }, 
             LDYAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.load(CPURegister::Y, val);
                 self.bump_pc(3);
@@ -520,7 +520,7 @@ impl Cpu {
                 3
             },
             STAAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 self.store(interconnect, ppu, addr, CPURegister::A);
                 self.bump_pc(3);
                 4
@@ -595,7 +595,7 @@ impl Cpu {
                 6
             },
             JMPAbs => {
-                let target_addr = self.absolute(interconnect, ppu);
+                let target_addr = self.absolute(interconnect);
                 self.jmp(target_addr);
                 3
             },
@@ -633,7 +633,7 @@ impl Cpu {
                 3
             },
             BITAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.bit(val);
                 self.bump_pc(3);
@@ -662,7 +662,7 @@ impl Cpu {
                 2
             },
             ORAAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val | accumulator});
                 self.bump_pc(3);
@@ -718,7 +718,7 @@ impl Cpu {
                 2
             },
             ANDAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val & accumulator});
                 self.bump_pc(3);
@@ -774,7 +774,7 @@ impl Cpu {
                 2
             }, 
             EORAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.logic_op(val, |val, accumulator|{val ^ accumulator});
                 self.bump_pc(3);
@@ -830,7 +830,7 @@ impl Cpu {
                 2
             },
             ADCAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.add(val);
                 self.bump_pc(3);
@@ -886,7 +886,7 @@ impl Cpu {
                 2
             }, 
             CMPAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.compare(CPURegister::A, val);
                 self.bump_pc(3);
@@ -942,7 +942,7 @@ impl Cpu {
                 2
             }, 
             SBCAbs => {
-                let addr = self.absolute(interconnect, ppu);
+                let addr = self.absolute(interconnect);
                 let val = interconnect.read_byte(ppu, addr);
                 self.sub(val);
                 self.bump_pc(3);
@@ -1201,7 +1201,7 @@ impl Cpu {
         interconnect.read_byte(ppu, self.pc + 1)
     }
 
-    fn absolute(&self, interconnect: &Interconnect, ppu: &Ppu) -> u16 {
+    fn absolute(&self, interconnect: &Interconnect) -> u16 {
         interconnect.read_word(self.pc + 1)
     }
 
@@ -1270,7 +1270,7 @@ impl Cpu {
         let addr = match am {
             ZeroPage => {self.zero_page(interconnect, ppu)},
             ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
-            Absolute => {self.absolute(interconnect, ppu)},
+            Absolute => {self.absolute(interconnect)},
             AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("ASL with unsupported Addressing Mode: {:?}", am),
         };
@@ -1348,7 +1348,7 @@ impl Cpu {
         let addr = match am {
             AddressingMode::ZeroPage => {self.zero_page(interconnect, ppu)},
             AddressingMode::ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
-            AddressingMode::Absolute => {self.absolute(interconnect, ppu)},
+            AddressingMode::Absolute => {self.absolute(interconnect)},
             AddressingMode::AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("Decrement with unsupported Addressing Mode: {:?}", am),
         };
@@ -1376,7 +1376,7 @@ impl Cpu {
         let addr = match am {
             AddressingMode::ZeroPage => {self.zero_page(interconnect, ppu)},
             AddressingMode::ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
-            AddressingMode::Absolute => {self.absolute(interconnect, ppu)},
+            AddressingMode::Absolute => {self.absolute(interconnect)},
             AddressingMode::AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("Increment with unsupported Addressing Mode: {:?}", am),
         };
@@ -1439,7 +1439,7 @@ impl Cpu {
         let addr = match am {
             ZeroPage => {self.zero_page(interconnect, ppu)},
             ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
-            Absolute => {self.absolute(interconnect, ppu)},
+            Absolute => {self.absolute(interconnect)},
             AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("LSR with unsupported Addressing Mode: {:?}", am),
         };
@@ -1485,7 +1485,7 @@ impl Cpu {
         let addr = match am {
             ZeroPage => {self.zero_page(interconnect, ppu)},
             ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
-            Absolute => {self.absolute(interconnect, ppu)},
+            Absolute => {self.absolute(interconnect)},
             AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("ROL with unsupported Addressing Mode: {:?}", am),
         };
@@ -1515,7 +1515,7 @@ impl Cpu {
         let addr = match am {
             ZeroPage => {self.zero_page(interconnect, ppu)},
             ZeroPageIndexed => {self.z_page_indexed(interconnect, ppu, CPURegister::X)},
-            Absolute => {self.absolute(interconnect, ppu)},
+            Absolute => {self.absolute(interconnect)},
             AbsoluteIndexed => {self.absolute_indexed(interconnect, CPURegister::X)},
             _ => panic!("ROR with unsupported Addressing Mode: {:?}", am),
         };

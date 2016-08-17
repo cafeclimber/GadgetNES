@@ -1,8 +1,8 @@
-/* I would like to completely refactor this. The way ownership
- * currently works is obnoxious and makes the code difficult to read.
- * Perhaps making the Interconnect have references to the APU and
- * the PPU would be more sane.
- */
+// I would like to completely refactor this. The way ownership
+// currently works is obnoxious and makes the code difficult to read.
+// Perhaps making the Interconnect have references to the APU and
+// the PPU would be more sane.
+//
 
 
 use super::apu::Apu;
@@ -13,7 +13,6 @@ use super::cart::Cartridge;
 pub struct Interconnect {
     pub ram: Box<[u8]>,
     apu: Apu,
-    // pub ppu: Ppu<'a>,
     cart: Cartridge,
 }
 
@@ -23,9 +22,6 @@ impl Interconnect {
         Interconnect {
             ram: vec![0; 0x0800].into_boxed_slice(),
             apu: Apu::default(),
-            // The interconnect owns the ppu so the cpu can more easily address it.
-            // In turn, the PPU owns it's own VRAM
-            // ppu: Ppu::new(cart_rom), 
             cart: Cartridge::new(cart_rom),
         }
     }
@@ -39,14 +35,14 @@ impl Interconnect {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
         match phys_addr {
-            PhysAddr::CpuRam(addr) => {self.ram[addr as usize]},
-            PhysAddr::RamMirrorOne(addr) => {self.ram[(addr - 0x0800) as usize]},
-            PhysAddr::RamMirrorTwo(addr) => {self.ram[(addr - 2 * 0x0800) as usize]},
-            PhysAddr::RamMirrorThree(addr) => {self.ram[(addr - 3 * 0x0800) as usize]},
-            PhysAddr::PpuRegs(addr) => {ppu.read_reg(addr - 0x2000)},
-            PhysAddr::PpuMirrors(addr) => {ppu.read_reg((addr - 0x2000) % 8)},
-            PhysAddr::ApuRegs(addr) => {self.apu.read_reg(addr - 0x4000)},
-            PhysAddr::CartSpace(addr) => {self.cart.read_cart(addr)},
+            PhysAddr::CpuRam(addr) => self.ram[addr as usize],
+            PhysAddr::RamMirrorOne(addr) => self.ram[(addr - 0x0800) as usize],
+            PhysAddr::RamMirrorTwo(addr) => self.ram[(addr - 2 * 0x0800) as usize],
+            PhysAddr::RamMirrorThree(addr) => self.ram[(addr - 3 * 0x0800) as usize],
+            PhysAddr::PpuRegs(addr) => ppu.read_reg(addr - 0x2000),
+            PhysAddr::PpuMirrors(addr) => ppu.read_reg((addr - 0x2000) % 8),
+            PhysAddr::ApuRegs(addr) => self.apu.read_reg(addr - 0x4000),
+            PhysAddr::CartSpace(addr) => self.cart.read_cart(addr),
         }
     }
 
@@ -55,14 +51,24 @@ impl Interconnect {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
         match phys_addr {
-            PhysAddr::CpuRam(addr) => {self.ram[addr as usize] = val;},
-            PhysAddr::RamMirrorOne(addr) => {self.ram[(addr - 0x0800) as usize] = val;},
-            PhysAddr::RamMirrorTwo(addr) => {self.ram[(addr - 2 * 0x0800) as usize] = val;},
-            PhysAddr::RamMirrorThree(addr) => {self.ram[(addr - 3 * 0x0800) as usize] = val;},
-            PhysAddr::PpuRegs(addr) => {ppu.write_to_reg(addr, val)},
-            PhysAddr::PpuMirrors(addr) => {ppu.write_to_reg(addr % 8, val)},
-            PhysAddr::ApuRegs(addr) => {self.apu.write_to_reg(addr - 0x4000, val)},
-            PhysAddr::CartSpace(addr) => {self.cart.write_byte_to_cart(addr, val);},
+            PhysAddr::CpuRam(addr) => {
+                self.ram[addr as usize] = val;
+            }
+            PhysAddr::RamMirrorOne(addr) => {
+                self.ram[(addr - 0x0800) as usize] = val;
+            }
+            PhysAddr::RamMirrorTwo(addr) => {
+                self.ram[(addr - 2 * 0x0800) as usize] = val;
+            }
+            PhysAddr::RamMirrorThree(addr) => {
+                self.ram[(addr - 3 * 0x0800) as usize] = val;
+            }
+            PhysAddr::PpuRegs(addr) => ppu.write_to_reg(addr, val),
+            PhysAddr::PpuMirrors(addr) => ppu.write_to_reg(addr % 8, val),
+            PhysAddr::ApuRegs(addr) => self.apu.write_to_reg(addr - 0x4000, val),
+            PhysAddr::CartSpace(addr) => {
+                self.cart.write_byte_to_cart(addr, val);
+            }
         }
     }
 
@@ -71,15 +77,24 @@ impl Interconnect {
         use super::mem_map::*;
         let phys_addr = map_virt_addr(virt_addr);
         match phys_addr {
-            PhysAddr::CpuRam(addr) =>         {self.ram[addr as usize] as u16 |
-                                               (self.ram[(addr + 1) as usize] as u16) << 8},
-            PhysAddr::RamMirrorOne(addr) =>   {self.ram[(addr - 0x0800) as usize] as u16 |
-                                               (self.ram[(addr + 1 -0x0800) as usize] as u16) << 8},
-            PhysAddr::RamMirrorTwo(addr) =>   {self.ram[(addr - 2 * 0x0800) as usize] as u16 |
-                                               (self.ram[(addr + 1 - (2 * 0x0800)) as usize] as u16) << 8},
-            PhysAddr::RamMirrorThree(addr) => {self.ram[(addr - 3 * 0x0800) as usize] as u16 |
-                                               (self.ram[(addr + 1 - (3 * 0x0800)) as usize] as u16) << 8},
-            PhysAddr::CartSpace(addr) => {self.cart.read_cart(addr) as u16 | (self.cart.read_cart(addr + 1) as u16) << 8},
+            PhysAddr::CpuRam(addr) => {
+                self.ram[addr as usize] as u16 | (self.ram[(addr + 1) as usize] as u16) << 8
+            }
+            PhysAddr::RamMirrorOne(addr) => {
+                self.ram[(addr - 0x0800) as usize] as u16 |
+                (self.ram[(addr + 1 - 0x0800) as usize] as u16) << 8
+            }
+            PhysAddr::RamMirrorTwo(addr) => {
+                self.ram[(addr - 2 * 0x0800) as usize] as u16 |
+                (self.ram[(addr + 1 - (2 * 0x0800)) as usize] as u16) << 8
+            }
+            PhysAddr::RamMirrorThree(addr) => {
+                self.ram[(addr - 3 * 0x0800) as usize] as u16 |
+                (self.ram[(addr + 1 - (3 * 0x0800)) as usize] as u16) << 8
+            }
+            PhysAddr::CartSpace(addr) => {
+                self.cart.read_cart(addr) as u16 | (self.cart.read_cart(addr + 1) as u16) << 8
+            }
             _ => panic!("{:?} does not support reading words", phys_addr),
         }
     }

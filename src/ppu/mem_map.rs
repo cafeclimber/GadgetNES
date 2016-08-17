@@ -40,14 +40,14 @@ enum PhysAddr {
 pub fn map_virt_addr(addr: u16) -> PhysAddr {
     use PhysAddr;
     match addr {
-        PATTERN_TABLE_0_BEG...PATTERN_TABLE_0_END => PatternTable_0(addr);
-        PATTERN_TABLE_1_BEG...PATTERN_TABLE_1_END => PatternTable_1(addr);
-        NAMETABLE_0_BEG...NAMETABLE_0_END => NameTable_0(addr);
-        NAMETABLE_1_BEG...NAMETABLE_1_END => NameTable_1(addr);
-        NAMETABLE_2_BEG...NAMETABLE_2_END => NameTable_2(addr);
-        NAMETABLE_3_BEG...NAMETABLE_3_END => NameTable_3(addr);
+        PATTERN_TABLE_0_BEG...PATTERN_TABLE_0_END => PatternTable_0(addr),
+        PATTERN_TABLE_1_BEG...PATTERN_TABLE_1_END => PatternTable_1(addr),
+        NAMETABLE_0_BEG...NAMETABLE_0_END => NameTable_0(addr),
+        NAMETABLE_1_BEG...NAMETABLE_1_END => NameTable_1(addr),
+        NAMETABLE_2_BEG...NAMETABLE_2_END => NameTable_2(addr),
+        NAMETABLE_3_BEG...NAMETABLE_3_END => NameTable_3(addr),
         PALETTE_RAM_BEG...PALETTE_RAM_END => InternalPalette(addr),
         VRAM_MIRROR_BEG...VRAM_MIRROR_END => map_virt_addr(addr - 0x4000),
+        _ => panic!("Read from this location not implemented: {:#X}", addr),
     }
-    _ => panic!("Read from this location not implemented: {:#X}", addr);
 }

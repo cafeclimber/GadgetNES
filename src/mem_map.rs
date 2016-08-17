@@ -48,7 +48,9 @@ pub fn map_virt_addr(addr: u16) -> PhysAddr {
 
         PPU_OAMDMA_REG => PhysAddr::PpuRegs(addr),
 
-        APU_REGS_BEG...APU_REGS_END | APU_STATUS | APU_FRAME_COUNTER => PhysAddr::ApuRegs(addr),
+        APU_REGS_BEG...APU_REGS_END |
+        APU_STATUS |
+        APU_FRAME_COUNTER => PhysAddr::ApuRegs(addr),
 
         CART_SPACE_BEG...CART_SPACE_END => PhysAddr::CartSpace(addr),
 
