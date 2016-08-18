@@ -171,12 +171,13 @@ impl Ppu {
             if x % 8 == 0 {
                 bg_pixel_buffer = self.refresh_buffer(interconnect);
             }
-            let background_pixel = self.make_background_pixel(&bg_pixel_buffer);
+            let background_pixel = self.make_background_pixel(interconnect, &bg_pixel_buffer, x as u8);
+            self.x_scroll += 1;
         }
 
         self.cycles += CPU_CYCLES_PER_SCANLINE;
-        self.x_scroll += 1;
         self.y_scroll += 1;
+        self.x_scroll = 0;
         if self.scanline == Scanline::Visible(LAST_VISIBLE_SCANLINE) {
             self.scanline = Scanline::PostRender;
         } else {
@@ -228,13 +229,31 @@ impl Ppu {
         }
     }
 
-    fn make_background_pixel(&mut self, buffer: &BgPixelBuffer) -> RGB {
+    fn make_background_pixel(&mut self, interconnect: &Interconnect, buffer: &BgPixelBuffer, x: u8) -> RGB {
         // TODO
+        let attr_color = match (((self.x_scroll / 8) % 4) < 2, ((self.y_scroll / 8) % 4) < 2) {
+            (true, true) => buffer.attribute & 0b11,
+            (false, true) => (buffer.attribute >> 2) & 0b11,
+            (true, false) => (buffer.attribute >> 4) & 0b11,
+            (false, false) => (buffer.attribute >> 6) & 0b11,
+        };
+
+        let offset = x % 8;
+        println!("Offset: {:#X}", offset);
+        let mut pattern_color = 0u8;
+        if offset == 0 {
+            
+        } else {
+            pattern_color = ((buffer.pattern_high) & (1 << offset)) >> (offset - 1) | 
+                                ((buffer.pattern_low) & (1 << offset)) >> offset;
+        }
+
+        let palette_index = interconnect.ppu_read_byte(0x3f00 + (pattern_color as u16)) & 0x3f;
+        println!("palette index: {:#X}", palette_index);
         RGB{red: 0, green:0, blue: 0}
     }
 
     fn fetch_nametable_byte(&mut self, interconnect: &Interconnect) -> u8 {
-        // TODO
         let x_index = (self.x_scroll / 8) % 64;
         let y_index = (self.y_scroll / 8) % 60;
         self.nametable = match(x_index >= 32, y_index >= 30) {
@@ -249,9 +268,9 @@ impl Ppu {
     }
 
     fn fetch_attribute(&mut self, interconnect: &Interconnect) -> u8 {
-        // TODO
+        // TODO: Unclear about group
         let group = (((self.x_scroll / 8) % 32) * 2) + ((self.x_scroll / 8) % 32) / 4;
-        let attr = interconnect.ppu_read_byte(group);
+        let attr = interconnect.ppu_read_byte(self.nametable + 0x3c0 + group);
         println!("Attribute: {:#X}", attr);
         attr
     }

@@ -117,6 +117,7 @@ impl Mapper for Mapper0 {
         }
     }
     fn get_palette_byte(&self, addr: u16) -> u8 {
+        // TODO: Handle palettes correctly
         if addr < 0x3f00 || addr > 0x3f1f {
             panic!("Attempted to get palette byte from outside palette ram: {:#X}",
                    addr);
