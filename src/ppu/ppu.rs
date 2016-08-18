@@ -29,6 +29,19 @@ enum Scanline {
     VBlank,
 }
 
+struct RGB {
+    red: u8,
+    green: u8,
+    blue: u8,
+}
+
+#[derive(Default)]
+struct BgPixelBuffer {
+    pattern_low: u8,
+    pattern_high: u8,
+    attribute: u8,
+}
+
 pub struct Ppu {
     ppuctrl: u8,
     ppumask: u8,
@@ -44,6 +57,10 @@ pub struct Ppu {
     cycles: u64,
     scanline: Scanline,
     pub frame: Box<[u8; SCREEN_WIDTH * SCREEN_HEIGHT * 3]>,
+
+    x_scroll: u16,
+    y_scroll: u16,
+    nametable: u16,
 }
 
 impl Ppu {
@@ -63,6 +80,10 @@ impl Ppu {
             cycles: 0,
             scanline: Scanline::PreRender,
             frame: Box::new([0u8; SCREEN_WIDTH * SCREEN_HEIGHT * 3]),
+
+            x_scroll: 0,
+            y_scroll: 0,
+            nametable: 0,
         }
     }
 
@@ -143,16 +164,19 @@ impl Ppu {
         // TODO: Refactor
         println!("################# Rendering scanline ##################: {:?}",
                  self.scanline);
-        for pixel in 0..SCREEN_WIDTH {
-            // I could probably just buffer the whole scanline, but this is more accurate
-            let pixel_loc = pixel % 8;
-            if pixel_loc == 0 {
-                let (pattern_table_low, pattern_table_high, attribute_low, attribute_high) =
-                    self.refresh_buffer(interconnect);
+        let mut bg_pixel_buffer = BgPixelBuffer::default();
+
+        for x in 0..SCREEN_WIDTH {
+            // I could probably just buffer the whole scanline, but I think this is more accurate
+            if x % 8 == 0 {
+                bg_pixel_buffer = self.refresh_buffer(interconnect);
             }
-            
+            let background_pixel = self.make_background_pixel(&bg_pixel_buffer);
         }
+
         self.cycles += CPU_CYCLES_PER_SCANLINE;
+        self.x_scroll += 1;
+        self.y_scroll += 1;
         if self.scanline == Scanline::Visible(LAST_VISIBLE_SCANLINE) {
             self.scanline = Scanline::PostRender;
         } else {
@@ -169,6 +193,8 @@ impl Ppu {
         self.set_vblank(true);
         self.cycles += CPU_CYCLES_PER_SCANLINE * VBLANK_SCANLINES;
         self.scanline = Scanline::PreRender;
+        self.x_scroll = 0;
+        self.y_scroll = 0;
         *vblank_nmi = self.throw_nmi();
     }
 
@@ -191,44 +217,51 @@ impl Ppu {
         }
     }
 
-    fn refresh_buffer(&mut self, interconnect: &Interconnect) -> (u8, u8, u8, u8) {
+    fn refresh_buffer(&mut self, interconnect: &Interconnect) -> BgPixelBuffer {
         // TODO
-        let pattern_table_low = self.fetch_pattern_table_low(interconnect);
-        let pattern_table_high = self.fetch_pattern_table_high(interconnect);
-        let attribute_low = self.fetch_attribute_low(interconnect);
-        let attribute_high = self.fetch_attribute_high(interconnect);
-        (pattern_table_low, pattern_table_high, attribute_low, attribute_high)
+        let nametable_byte = self.fetch_nametable_byte(interconnect);
+        let (pattern_low, pattern_high) = self.fetch_pattern(interconnect, nametable_byte);
+        BgPixelBuffer {
+            pattern_low: pattern_low,
+            pattern_high: pattern_high,
+            attribute: self.fetch_attribute(interconnect),
+        }
+    }
+
+    fn make_background_pixel(&mut self, buffer: &BgPixelBuffer) -> RGB {
+        // TODO
+        RGB{red: 0, green:0, blue: 0}
     }
 
     fn fetch_nametable_byte(&mut self, interconnect: &Interconnect) -> u8 {
         // TODO
-        let byte = interconnect.ppu_read_byte(0x2000) as u8;
-        println!("Fetched nametable byte: {:#X}", byte);
-        byte
+        let x_index = (self.x_scroll / 8) % 64;
+        let y_index = (self.y_scroll / 8) % 60;
+        self.nametable = match(x_index >= 32, y_index >= 30) {
+            (false, false) => 0x2000,
+            (true, false) => 0x2400,
+            (false, true) => 0x2800,
+            (true, true) => 0x2c00,
+        };
+
+        let addr = self.nametable + (32 * y_index as u16) + (x_index as u16);
+        interconnect.ppu_read_byte(addr)
     }
-    fn fetch_attribute_low(&mut self, interconnect: &Interconnect) -> u8 {
+
+    fn fetch_attribute(&mut self, interconnect: &Interconnect) -> u8 {
         // TODO
-        let byte = interconnect.ppu_read_byte(0) as u8;
-        println!("Fetched attribute byte: {:#X}", byte);
-        byte
+        let group = (((self.x_scroll / 8) % 32) * 2) + ((self.x_scroll / 8) % 32) / 4;
+        let attr = interconnect.ppu_read_byte(group);
+        println!("Attribute: {:#X}", attr);
+        attr
     }
-    fn fetch_attribute_high(&mut self, interconnect: &Interconnect) -> u8 {
-        // TODO
-        let byte = interconnect.ppu_read_byte(0) as u8;
-        println!("Fetched attribute byte: {:#X}", byte);
-        byte
-    }
-    fn fetch_pattern_table_low(&mut self, interconnect: &Interconnect) -> u8 {
-        // TODO
-        let bytes = interconnect.ppu_read_byte(0);
-        println!("Fetched tile bitmap bytes");
-        bytes
-    }
-    fn fetch_pattern_table_high(&mut self, interconnect: &Interconnect) -> u8 {
-        // TODO
-        let bytes = interconnect.ppu_read_byte(0);
-        println!("Fetched tile bitmap bytes");
-        bytes
+    fn fetch_pattern(&mut self, interconnect: &Interconnect, nametable_byte: u8) -> (u8, u8) {
+        // TODO: Unclear about the addr
+        let addr = ((nametable_byte as u16) << 4) + ((self.y_scroll / 8) as u16);
+        let pattern_low = interconnect.ppu_read_byte(addr);
+        let pattern_high = interconnect.ppu_read_byte(addr + 8);
+        println!("Pattern low: {:#X} Pattern high: {:#X}", pattern_low, pattern_high);
+        (pattern_low, pattern_high)
     }
 }
 
