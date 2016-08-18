@@ -21,6 +21,7 @@ These are documents or websites I have found particularly useful during this pro
 * http://www.emulator101.com/reference/6502-reference.html
 * http://6502.org/tutorials/6502opcodes.html
 * https://en.wikibooks.org/wiki/6502_Assembly
+* Holy crap did this help in understanding PPU operation: http://www.dustmop.io/blog/2015/04/28/nes-graphics-part-1/
 
 Other helpful materials
 -----------------------
