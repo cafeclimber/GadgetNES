@@ -10,24 +10,16 @@ const VBLANK_SCANLINES: u64 = 20;
 const VBLANK_FLAG: u8 = (1 << 7);
 
 // Shamlessly copied from SprocketNES...too much typing
-static PALETTE: [u8; 192] = [
-    124,124,124,    0,0,252,        0,0,188,        68,40,188,
-    148,0,132,      168,0,32,       168,16,0,       136,20,0,
-    80,48,0,        0,120,0,        0,104,0,        0,88,0,
-    0,64,88,        0,0,0,          0,0,0,          0,0,0,
-    188,188,188,    0,120,248,      0,88,248,       104,68,252,
-    216,0,204,      228,0,88,       248,56,0,       228,92,16,
-    172,124,0,      0,184,0,        0,168,0,        0,168,68,
-    0,136,136,      0,0,0,          0,0,0,          0,0,0,
-    248,248,248,    60,188,252,     104,136,252,    152,120,248,
-    248,120,248,    248,88,152,     248,120,88,     252,160,68,
-    248,184,0,      184,248,24,     88,216,84,      88,248,152,
-    0,232,216,      120,120,120,    0,0,0,          0,0,0,
-    252,252,252,    164,228,252,    184,184,248,    216,184,248,
-    248,184,248,    248,164,192,    240,208,176,    252,224,168,
-    248,216,120,    216,248,120,    184,248,184,    184,248,216,
-    0,252,252,      248,216,248,    0,0,0,          0,0,0
-];
+static PALETTE: [u8; 192] =
+    [124, 124, 124, 0, 0, 252, 0, 0, 188, 68, 40, 188, 148, 0, 132, 168, 0, 32, 168, 16, 0, 136,
+     20, 0, 80, 48, 0, 0, 120, 0, 0, 104, 0, 0, 88, 0, 0, 64, 88, 0, 0, 0, 0, 0, 0, 0, 0, 0, 188,
+     188, 188, 0, 120, 248, 0, 88, 248, 104, 68, 252, 216, 0, 204, 228, 0, 88, 248, 56, 0, 228,
+     92, 16, 172, 124, 0, 0, 184, 0, 0, 168, 0, 0, 168, 68, 0, 136, 136, 0, 0, 0, 0, 0, 0, 0, 0,
+     0, 248, 248, 248, 60, 188, 252, 104, 136, 252, 152, 120, 248, 248, 120, 248, 248, 88, 152,
+     248, 120, 88, 252, 160, 68, 248, 184, 0, 184, 248, 24, 88, 216, 84, 88, 248, 152, 0, 232,
+     216, 120, 120, 120, 0, 0, 0, 0, 0, 0, 252, 252, 252, 164, 228, 252, 184, 184, 248, 216, 184,
+     248, 248, 184, 248, 248, 164, 192, 240, 208, 176, 252, 224, 168, 248, 216, 120, 216, 248,
+     120, 184, 248, 184, 184, 248, 216, 0, 252, 252, 248, 216, 248, 0, 0, 0, 0, 0, 0];
 
 #[derive(Debug, PartialEq)]
 enum Scanline {
@@ -49,10 +41,9 @@ pub struct Ppu {
     oamdma: u8,
 
     // oam: Box<[u8; 0xff]>,
-
     cycles: u64,
     scanline: Scanline,
-    pub frame: Box<[u8; SCREEN_WIDTH*SCREEN_HEIGHT*3]>,
+    pub frame: Box<[u8; SCREEN_WIDTH * SCREEN_HEIGHT * 3]>,
 }
 
 impl Ppu {
@@ -69,18 +60,17 @@ impl Ppu {
             oamdma: 0,
 
             // oam: Box::new([0u8; 0xff]),
-
             cycles: 0,
             scanline: Scanline::PreRender,
-            frame: Box::new([0u8; SCREEN_WIDTH*SCREEN_HEIGHT*3]),
+            frame: Box::new([0u8; SCREEN_WIDTH * SCREEN_HEIGHT * 3]),
         }
     }
-    
+
     pub fn read_reg(&self, addr: u16) -> u8 {
         if addr == 0x4014 {
             self.oamdma
         } else {
-            match addr & 1<<0 {
+            match addr & 1 << 0 {
                 0x0 => self.ppuctrl,
                 0x1 => self.ppumask,
                 0x2 => self.ppustatus,
@@ -98,7 +88,7 @@ impl Ppu {
         if addr == 0x4014 {
             self.oamdma = val;
         } else {
-            match addr & 1<<0 {
+            match addr & 1 << 0 {
                 0x0 => self.ppuctrl = val,
                 0x1 => self.ppumask = val,
                 0x2 => self.ppustatus = val,
@@ -124,19 +114,19 @@ impl Ppu {
                 Scanline::PreRender => {
                     self.prerender();
                     vblank = false;
-                },
+                }
                 Scanline::Visible(line) => {
                     self.render_scanline(interconnect, line);
                     vblank = false;
-                },
+                }
                 Scanline::PostRender => {
                     self.postrender();
                     vblank = false;
-                },
+                }
                 Scanline::VBlank => {
                     println!("###################### V Blank ########################");
                     self.vblank(&mut vblank);
-                },
+                }
             }
             self.cycles += CPU_CYCLES_PER_SCANLINE; // It's easier to just deal in cpu cycles.
         }
@@ -145,18 +135,22 @@ impl Ppu {
 
     fn prerender(&mut self) {
         self.set_vblank(false);
-        self.scanline= Scanline::Visible(0);
+        self.scanline = Scanline::Visible(0);
         self.cycles += CPU_CYCLES_PER_SCANLINE;
     }
 
     fn render_scanline(&mut self, interconnect: &mut Interconnect, line: u8) {
         // TODO: Refactor
-        println!("################# Rendering scanline ##################: {:?}", self.scanline);
-        let mut background_buffer = 0u8;
+        println!("################# Rendering scanline ##################: {:?}",
+                 self.scanline);
         for pixel in 0..SCREEN_WIDTH {
-            if pixel % 8 == 0 {
-                background_buffer = self.refresh_background_buffer(interconnect);
+            // I could probably just buffer the whole scanline, but this is more accurate
+            let pixel_loc = pixel % 8;
+            if pixel_loc == 0 {
+                let (pattern_table_low, pattern_table_high, attribute_low, attribute_high) =
+                    self.refresh_buffer(interconnect);
             }
+            
         }
         self.cycles += CPU_CYCLES_PER_SCANLINE;
         if self.scanline == Scanline::Visible(LAST_VISIBLE_SCANLINE) {
@@ -184,22 +178,26 @@ impl Ppu {
                 self.ppustatus |= VBLANK_FLAG;
             }
             false => {
-                self.ppustatus &= !VBLANK_FLAG;   
-                }
+                self.ppustatus &= !VBLANK_FLAG;
+            }
         }
     }
 
     fn throw_nmi(&self) -> bool {
-        if (self.ppuctrl & (1<<7)) != 0 {
+        if (self.ppuctrl & (1 << 7)) != 0 {
             true
         } else {
             false
         }
     }
 
-    fn refresh_background_buffer(&mut self, interconnect: &Interconnect) -> u8 {
+    fn refresh_buffer(&mut self, interconnect: &Interconnect) -> (u8, u8, u8, u8) {
         // TODO
-        0
+        let pattern_table_low = self.fetch_pattern_table_low(interconnect);
+        let pattern_table_high = self.fetch_pattern_table_high(interconnect);
+        let attribute_low = self.fetch_attribute_low(interconnect);
+        let attribute_high = self.fetch_attribute_high(interconnect);
+        (pattern_table_low, pattern_table_high, attribute_low, attribute_high)
     }
 
     fn fetch_nametable_byte(&mut self, interconnect: &Interconnect) -> u8 {
@@ -208,24 +206,29 @@ impl Ppu {
         println!("Fetched nametable byte: {:#X}", byte);
         byte
     }
-    fn fetch_attribute_byte(&mut self, interconnect: &Interconnect) -> u8 {
+    fn fetch_attribute_low(&mut self, interconnect: &Interconnect) -> u8 {
         // TODO
         let byte = interconnect.ppu_read_byte(0) as u8;
         println!("Fetched attribute byte: {:#X}", byte);
         byte
     }
-    fn fetch_tile_bitmap(&mut self, interconnect: &Interconnect) -> u16 {
+    fn fetch_attribute_high(&mut self, interconnect: &Interconnect) -> u8 {
         // TODO
-        /* let addr = {
-            if self.ppuctrl & (1<<5) != 0 {
-                (self.ppuctrl & (1<<3)) | 
-            } else {
-                
-            }
-        } */
+        let byte = interconnect.ppu_read_byte(0) as u8;
+        println!("Fetched attribute byte: {:#X}", byte);
+        byte
+    }
+    fn fetch_pattern_table_low(&mut self, interconnect: &Interconnect) -> u8 {
+        // TODO
         let bytes = interconnect.ppu_read_byte(0);
         println!("Fetched tile bitmap bytes");
-        bytes as u16
+        bytes
+    }
+    fn fetch_pattern_table_high(&mut self, interconnect: &Interconnect) -> u8 {
+        // TODO
+        let bytes = interconnect.ppu_read_byte(0);
+        println!("Fetched tile bitmap bytes");
+        bytes
     }
 }
 
