@@ -2,6 +2,17 @@ GadgetNES
 ========
 Writing my first emulator in Rust!
 
+Running
+-------
+    git clone
+    cd GadgetNES
+    cargo build
+    ./target/debug/gadget_nes /path/to/rom
+
+Contributing
+------------
+Feel free to submit pull requests or issues of any kind, clone, fork, whatever!
+
 Purpose
 -------
 My goal for this project is to become more familiar with Rust, develop my programming skills, and learn some emulator development to hopefully make more projects!
