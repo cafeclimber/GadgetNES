@@ -45,6 +45,7 @@ impl<'a> Nes<'a> {
             let vblank = self.ppu.step(&mut self.interconnect, &self.cpu.cycles);
             if vblank {
                 self.cpu.interrupt(&mut self.interconnect, &mut self.ppu, Interrupt::NMI);
+                // sdl_interface.display_frame()
             }
             game_state = match self.sdl_interface.check_input() {
                 Input::Quit => GameState::Quit,
