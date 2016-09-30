@@ -122,7 +122,7 @@ impl Mapper for Mapper0 {
             panic!("Attempted to get palette byte from outside palette ram: {:#X}",
                    addr);
         }
-        self.chr_mem[addr as usize]
+        self.chr_mem[(addr-0x3f00) as usize]
     }
 
     fn load_rom(&mut self, rom: Vec<u8>) {

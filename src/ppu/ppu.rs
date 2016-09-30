@@ -29,6 +29,7 @@ enum Scanline {
     VBlank,
 }
 
+#[derive(Debug)]
 struct RGB {
     red: u8,
     green: u8,
@@ -147,6 +148,7 @@ impl Ppu {
                 Scanline::VBlank => {
                     println!("###################### V Blank ########################");
                     self.vblank(&mut vblank);
+                    vblank = true;
                 }
             }
             self.cycles += CPU_CYCLES_PER_SCANLINE; // It's easier to just deal in cpu cycles.
@@ -172,6 +174,8 @@ impl Ppu {
                 bg_pixel_buffer = self.refresh_buffer(interconnect);
             }
             let background_pixel = self.make_background_pixel(interconnect, &bg_pixel_buffer, x as u8);
+            let y = self.y_scroll as usize;
+            self.putpixel(x, y, background_pixel);
             self.x_scroll += 1;
         }
 
@@ -183,6 +187,7 @@ impl Ppu {
         } else {
             self.scanline = Scanline::Visible(line + 1);
         }
+
     }
 
     fn postrender(&mut self) {
@@ -247,10 +252,29 @@ impl Ppu {
             pattern_color = ((buffer.pattern_high) & (1 << offset)) >> (offset - 1) | 
                                 ((buffer.pattern_low) & (1 << offset)) >> offset;
         }
+        println!("pattern_color: {:#b}", pattern_color);
 
-        let palette_index = interconnect.ppu_read_byte(0x3f00 + (pattern_color as u16)) & 0x3f;
+        let tile_color = (attr_color << 2) | pattern_color;
+        println!("Tile Color: {:#b}", tile_color);
+
+        let palette_index = interconnect.ppu_read_byte(0x3f00 + (tile_color as u16)) & 0x3f;
         println!("palette index: {:#X}", palette_index);
-        RGB{red: 0, green:0, blue: 0}
+        println!("RGB: {:?}", self.get_color(palette_index));
+        self.get_color(palette_index)
+    }
+
+    fn get_color(&self, palette_index: u8) -> RGB {
+        RGB {
+            red: PALETTE[palette_index as usize * 3 + 2],
+            green: PALETTE[palette_index as usize * 3 + 1],
+            blue: PALETTE[palette_index as usize * 3 + 0],
+        }
+    }
+
+    fn putpixel(&mut self, x: usize, y: usize, color: RGB) {
+        self.frame[(y * SCREEN_WIDTH + x) * 3 + 0] = color.red;
+        self.frame[(y * SCREEN_WIDTH + x) * 3 + 1] = color.green;
+        self.frame[(y * SCREEN_WIDTH + x) * 3 + 2] = color.blue;
     }
 
     fn fetch_nametable_byte(&mut self, interconnect: &Interconnect) -> u8 {
