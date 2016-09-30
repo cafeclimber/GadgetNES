@@ -84,7 +84,7 @@ impl Ppu {
 
             x_scroll: 0,
             y_scroll: 0,
-            nametable: 0,
+            nametable: 0x2000,
         }
     }
 
@@ -224,34 +224,20 @@ impl Ppu {
     }
 
     fn refresh_buffer(&mut self, interconnect: &Interconnect) -> BgPixelBuffer {
-        // TODO
-        let nametable_byte = self.fetch_nametable_byte(interconnect);
-        let (pattern_low, pattern_high) = self.fetch_pattern(interconnect, nametable_byte);
         BgPixelBuffer {
-            pattern_low: pattern_low,
-            pattern_high: pattern_high,
-            attribute: self.fetch_attribute(interconnect),
+            pattern_low: 0,
+            pattern_high: 0,
+            attribute: 0,
         }
     }
 
     fn make_background_pixel(&mut self, interconnect: &Interconnect, buffer: &BgPixelBuffer, x: u8) -> RGB {
-        // TODO
-        let attr_color = match (((self.x_scroll / 8) % 4) < 2, ((self.y_scroll / 8) % 4) < 2) {
-            (true, true) => buffer.attribute & 0b11,
-            (false, true) => (buffer.attribute >> 2) & 0b11,
-            (true, false) => (buffer.attribute >> 4) & 0b11,
-            (false, false) => (buffer.attribute >> 6) & 0b11,
-        };
-
-        let offset = x % 8;
-        println!("Offset: {:#X}", offset);
-        let mut pattern_color = 0u8;
-        if offset == 0 {
-            
-        } else {
-            pattern_color = ((buffer.pattern_high) & (1 << offset)) >> (offset - 1) | 
-                                ((buffer.pattern_low) & (1 << offset)) >> offset;
+        RGB {
+            red: 0,
+            green: 0,
+            blue: 0,
         }
+<<<<<<< HEAD
         println!("pattern_color: {:#b}", pattern_color);
 
         let tile_color = (attr_color << 2) | pattern_color;
@@ -275,36 +261,16 @@ impl Ppu {
         self.frame[(y * SCREEN_WIDTH + x) * 3 + 0] = color.red;
         self.frame[(y * SCREEN_WIDTH + x) * 3 + 1] = color.green;
         self.frame[(y * SCREEN_WIDTH + x) * 3 + 2] = color.blue;
+=======
+>>>>>>> f96ef52be3e96c17ebe1d11fa8dbd00c221f2704
     }
 
     fn fetch_nametable_byte(&mut self, interconnect: &Interconnect) -> u8 {
-        let x_index = (self.x_scroll / 8) % 64;
-        let y_index = (self.y_scroll / 8) % 60;
-        self.nametable = match(x_index >= 32, y_index >= 30) {
-            (false, false) => 0x2000,
-            (true, false) => 0x2400,
-            (false, true) => 0x2800,
-            (true, true) => 0x2c00,
-        };
-
-        let addr = self.nametable + (32 * y_index as u16) + (x_index as u16);
-        interconnect.ppu_read_byte(addr)
     }
 
     fn fetch_attribute(&mut self, interconnect: &Interconnect) -> u8 {
-        // TODO: Unclear about group
-        let group = (((self.x_scroll / 8) % 32) * 2) + ((self.x_scroll / 8) % 32) / 4;
-        let attr = interconnect.ppu_read_byte(self.nametable + 0x3c0 + group);
-        println!("Attribute: {:#X}", attr);
-        attr
     }
     fn fetch_pattern(&mut self, interconnect: &Interconnect, nametable_byte: u8) -> (u8, u8) {
-        // TODO: Unclear about the addr
-        let addr = ((nametable_byte as u16) << 4) + ((self.y_scroll / 8) as u16);
-        let pattern_low = interconnect.ppu_read_byte(addr);
-        let pattern_high = interconnect.ppu_read_byte(addr + 8);
-        println!("Pattern low: {:#X} Pattern high: {:#X}", pattern_low, pattern_high);
-        (pattern_low, pattern_high)
     }
 }
 
