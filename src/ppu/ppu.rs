@@ -173,9 +173,9 @@ impl Ppu {
             if x % 8 == 0 {
                 bg_pixel_buffer = self.refresh_buffer(interconnect);
             }
-            let background_pixel = self.make_background_pixel(interconnect, &bg_pixel_buffer, x as u8);
+            //let background_pixel = self.make_background_pixel(interconnect, &bg_pixel_buffer, x as u8);
             let y = self.y_scroll as usize;
-            self.putpixel(x, y, background_pixel);
+            //self.putpixel(x, y, background_pixel);
             self.x_scroll += 1;
         }
 
@@ -231,13 +231,13 @@ impl Ppu {
         }
     }
 
-    fn make_background_pixel(&mut self, interconnect: &Interconnect, buffer: &BgPixelBuffer, x: u8) -> RGB {
+    /*fn make_background_pixel(&mut self, interconnect: &Interconnect, buffer: &BgPixelBuffer, x: u8) -> RGB {
         RGB {
             red: 0,
             green: 0,
             blue: 0,
-        }
-<<<<<<< HEAD
+        };
+
         println!("pattern_color: {:#b}", pattern_color);
 
         let tile_color = (attr_color << 2) | pattern_color;
@@ -247,7 +247,7 @@ impl Ppu {
         println!("palette index: {:#X}", palette_index);
         println!("RGB: {:?}", self.get_color(palette_index));
         self.get_color(palette_index)
-    }
+    }*/
 
     fn get_color(&self, palette_index: u8) -> RGB {
         RGB {
@@ -261,16 +261,17 @@ impl Ppu {
         self.frame[(y * SCREEN_WIDTH + x) * 3 + 0] = color.red;
         self.frame[(y * SCREEN_WIDTH + x) * 3 + 1] = color.green;
         self.frame[(y * SCREEN_WIDTH + x) * 3 + 2] = color.blue;
-=======
->>>>>>> f96ef52be3e96c17ebe1d11fa8dbd00c221f2704
     }
 
     fn fetch_nametable_byte(&mut self, interconnect: &Interconnect) -> u8 {
+        0
     }
 
     fn fetch_attribute(&mut self, interconnect: &Interconnect) -> u8 {
+        0
     }
     fn fetch_pattern(&mut self, interconnect: &Interconnect, nametable_byte: u8) -> (u8, u8) {
+        (0,0)
     }
 }
 
