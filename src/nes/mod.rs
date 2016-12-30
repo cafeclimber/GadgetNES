@@ -1,12 +1,15 @@
 mod cpu;
+pub mod ppu;
 mod memory;
 
 use self::cpu::Cpu;
+use self::ppu::Ppu;
 use self::memory::Memory;
 use super::ines::InesRom;
 
 pub struct Nes {
     cpu: Cpu,
+    ppu: Ppu,
     mem: Memory,
     state: NesState,
 }
@@ -33,8 +36,9 @@ enum NesState {
 impl Nes {
     pub fn init(rom: &InesRom) -> Nes {
         Nes {
-            cpu: Cpu::init(),
-            mem: Memory::init(rom),
+            cpu: Cpu::new(),
+            ppu: Ppu::new(),
+            mem: Memory::new(rom),
             state: NesState::Running,
         }
     }

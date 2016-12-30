@@ -5,3 +5,6 @@ authors = ["Ryan Campbell <rdcampbell1990@gmail.com>"]
 
 [dependencies]
 sdl2 = "0.21.0"
+
+[features]
+DEBUG = []

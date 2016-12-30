@@ -20,7 +20,7 @@ pub struct Memory {
 }
 
 impl Memory {
-    pub fn init(rom: &InesRom) -> Memory {
+    pub fn new(rom: &InesRom) -> Memory {
         Memory {
             ram: Ram::new(),
             prg: choose_mapper(rom),

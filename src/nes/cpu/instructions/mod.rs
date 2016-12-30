@@ -33,7 +33,6 @@ pub enum AddressingMode {
 
 // TODO: Add unofficial ops
 #[derive(Debug, PartialEq, Copy, Clone)]
-#[allow(dead_code)]
 pub enum Instruction {
     BRK, PHP, PLP, PHA, PLA, TXS, TSX, BPL,
     BMI, BVC, BVS, BCC, BCS, BNE, BEQ, CLC,
@@ -73,7 +72,7 @@ pub fn decode(op_code: u8) -> (Instruction, AddressingMode) {
         // Flag instructions
         0x18 => (Instruction::CLC, AddressingMode::Implied),
         0x38 => (Instruction::SEC, AddressingMode::Implied),
-        // 0x58 => (Instruction::CLI, AddressingMode::Implied),
+        0x58 => (Instruction::CLI, AddressingMode::Implied),
         0x78 => (Instruction::SEI, AddressingMode::Implied),
         0xB8 => (Instruction::CLV, AddressingMode::Implied),
         0xD8 => (Instruction::CLD, AddressingMode::Implied),
@@ -111,7 +110,7 @@ pub fn decode(op_code: u8) -> (Instruction, AddressingMode) {
         0xA6 => (Instruction::LDX, AddressingMode::ZeroPage),
         0xAE => (Instruction::LDX, AddressingMode::Absolute),
         0xB6 => (Instruction::LDX, AddressingMode::ZeroPageIndexedY),
-        0xBE => (Instruction::LDX, AddressingMode::AbsoluteIndexedX),
+        0xBE => (Instruction::LDX, AddressingMode::AbsoluteIndexedY),
 
         0xA0 => (Instruction::LDY, AddressingMode::Immediate),
         0xA4 => (Instruction::LDY, AddressingMode::ZeroPage),
@@ -248,8 +247,6 @@ pub fn decode(op_code: u8) -> (Instruction, AddressingMode) {
     }
 }
 
-// All instructions increment pc by 1.
-// PC is also incremented in MemoryMap depending on addressing mode
 pub fn execute(cpu: &mut Cpu,
                mem: &mut Memory,
                instr: (Instruction, AddressingMode))

@@ -1,51 +1,35 @@
 //! For instructions related to setting and clearing of flags
 //! All instructions reutrn the number of cycles taken
-#![allow(dead_code)]
 #![allow(non_snake_case)]
-#![allow(unused_variables)]
 
 use nes::cpu::{Cpu, StatusFlag};
 
 impl Cpu {
     pub fn CLC(&mut self) {
-        print!(" CLC         ");
-        print!("                   ");
-        self.unset_flag(StatusFlag::Carry);
+        self.set_flag(StatusFlag::Carry, false);
     }
 
     pub fn SEC(&mut self) {
-        print!(" SEC         ");
-        print!("                   ");
-        self.set_flag(StatusFlag::Carry);
+        self.set_flag(StatusFlag::Carry, true);
     }
 
     pub fn CLI(&mut self) {
-        print!(" CLI         ");
-        print!("                   ");
-        self.set_flag(StatusFlag::Carry);
+        self.set_flag(StatusFlag::IntDisable, false);
     }
 
     pub fn SEI(&mut self) {
-        print!(" SEI         ");
-        print!("                   ");
-        self.set_flag(StatusFlag::IntDisable);
+        self.set_flag(StatusFlag::IntDisable, true);
     }
 
     pub fn CLV(&mut self) {
-        print!(" CLV         ");
-        print!("                   ");
-        self.unset_flag(StatusFlag::Overflow);
+        self.set_flag(StatusFlag::Overflow, false);
     }
 
     pub fn CLD(&mut self) {
-        print!(" CLD         ");
-        print!("                   ");
-        self.unset_flag(StatusFlag::Decimal);
+        self.set_flag(StatusFlag::Decimal, false);
     }
 
     pub fn SED(&mut self) {
-        print!(" SED         ");
-        print!("                   ");
-        self.set_flag(StatusFlag::Decimal);
+        self.set_flag(StatusFlag::Decimal, true);
     }
 }

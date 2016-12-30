@@ -52,7 +52,7 @@ enum StatusFlag {
 }
 
 impl Cpu {
-    pub fn init() -> Cpu {
+    pub fn new() -> Cpu {
         Cpu {
             pc: 0x8000,
             sp: 0xFD, // Top of stack starts at end of Page 1 of RAM
@@ -63,7 +63,6 @@ impl Cpu {
         }
     }
 
-    // TODO: Check for overflows of stack page?
     fn push_stack(&mut self, mem: &mut Memory, val: u8) {
         mem.write_ram_byte((self.sp as u16) + 0x100, val);
         self.sp -= 1;
@@ -71,52 +70,48 @@ impl Cpu {
 
     fn pop_stack(&mut self, mem: &mut Memory) -> u8 {
         self.sp += 1;
-        let val = mem.read_ram_byte((self.sp as u16) + 0x100);
-        val
+        mem.read_ram_byte((self.sp as u16) + 0x100)
     }
 
-    fn set_flag(&mut self, flag: StatusFlag) {
-        self.p |= flag as u8;
+    fn set_flag(&mut self, flag: StatusFlag, set: bool) {
+        match set {
+            true => self.p |= flag as u8,
+            false => self.p &= !(flag as u8),
+        }
     }
 
-    fn unset_flag(&mut self, flag: StatusFlag) {
-        self.p &= !(flag as u8);
+    fn check_flag(&self, flag: StatusFlag, is_set: bool) -> bool {
+        match is_set {
+            true => self.p & flag as u8 != 0,
+            false => self.p & flag as u8 == 0,
+        }
+        
     }
-
-    fn check_flag(&self, flag: StatusFlag) -> bool {
-        self.p & flag as u8 != 0
-    }
-
-    fn check_no_flag(&self, flag: StatusFlag) -> bool {
-        self.p & flag as u8 == 0
-    }
-
 
     // fetches, decodes, and executes instruction printing state AFTER
     // running instruction
     pub fn step(&mut self, mem: &mut Memory) {
-        print!("{:04X}", self.pc);
-
         let op_code = read_byte(mem, self.pc);
-        print!("  {:02X}       ", op_code);
-
         let (inst, addr_mode) = decode(op_code);
+
+        #[cfg(feature="DEBUG")]
+        debug_print(&self, op_code, inst, mem, addr_mode);
+
         execute(self, mem, (inst, addr_mode));
 
-        if inst != Instruction::JMP  &&
+
+        if inst != Instruction::JMP &&
            inst != Instruction::JSR &&
            inst != Instruction::RTS &&
            inst != Instruction::RTI
         {
             self.bump_pc(addr_mode); // Increment pc depending on addressing mode
         }
-
-        print!("{:?}\n", self);
     }
 
     pub fn bump_pc(&mut self, addr_mode: AddressingMode) {
         let bump: u16 = match addr_mode {
-            // Only for jumps and branches which set pc
+            // Jumps handled above, branches set own PC, so don't change
             AddressingMode::Indirect => 0,
             AddressingMode::Relative => 0, 
 
@@ -137,193 +132,241 @@ impl Cpu {
         self.pc += bump;
     }
 
-    // TODO: Better name?
     pub fn fetch_byte(&self,
                       mem: &Memory,
                       addr_mode: AddressingMode)
                       -> u8
     {
         match addr_mode {
-            AddressingMode::Accumulator => {
-                self.a
-            }
-            AddressingMode::Immediate => {
-                print!(" #${:02X}    ", read_byte(mem, self.pc + 1));
-                print!("                   ");
-                read_byte(mem, self.pc + 1)
-            },
-            AddressingMode::ZeroPage => {
-                print!(" ${:02X}     ", read_byte(mem, self.pc + 1));
-                print!("                   ");
-                let addr = read_byte(mem, self.pc + 1) as u16;
-                read_byte(mem, addr)
-            },
-            AddressingMode::Absolute => {
-                print!(" ${:04X}   ", read_word(mem, self.pc + 1));
-                print!("                   ");
-                let addr = read_word(mem, self.pc + 1);
-                read_byte(mem, addr)
-            },
-            AddressingMode::IndexedIndirect => {
-                print!(" (${:02X},X) @", read_byte(mem, self.pc + 1));
-                let operand = read_byte(mem, self.pc + 1);
-                let index = operand.wrapping_add(self.x);
-                // Deals with zero-page wrapping
-                let addr = {
-                    (read_byte(mem, index as u16) as u16) |
-                    (read_byte(mem, index.wrapping_add(1) as u16) as u16) << 8
-                };
-                let val = read_byte(mem, addr);
-                print!(" {:02X} = {:04X} = {:02X}   ", index, addr, val);
-                val
-            },
-            AddressingMode::IndirectIndexed => {
-                print!(" (${:02X}),Y", read_byte(mem, self.pc + 1));
-                let operand = read_byte(mem, self.pc + 1);
-                // Deals with zero-page wrapping
-                let mut addr = {
-                    (read_byte(mem, operand as u16) as u16) |
-                    (read_byte(mem, operand.wrapping_add(1) as u16) as u16) << 8
-                };
-                print!(" = {:04X}", addr);
-                addr = addr.wrapping_add(self.y as u16);
-                let val = read_byte(mem, addr);
-                print!(" @ {:04X} = {:02X} ", addr, val);
-                val
-            },
-            AddressingMode::ZeroPageIndexedX => {
-                print!(" ${:02X},X", read_byte(mem, self.pc + 1));
-                let mut addr = read_byte(mem, self.pc + 1);
-                addr = addr.wrapping_add(self.x);
-                print!(" @ {:02X} = {:02X}            ", addr,
-                       read_byte(mem, addr as u16));
-                read_byte(mem, addr as u16)
-            },
-            AddressingMode::ZeroPageIndexedY => {
-                print!(" ${:02X},Y", read_byte(mem, self.pc + 1));
-                let mut addr = read_byte(mem, self.pc + 1);
-                addr = addr.wrapping_add(self.y);
-                print!(" @ {:02X} = {:02X}            ", addr,
-                       read_byte(mem, addr as u16));
-                read_byte(mem, addr as u16)
-            },
-            AddressingMode::AbsoluteIndexedX => {
-                print!(" ${:04X},X", read_word(mem, self.pc + 1));
-                let mut addr = read_word(mem, self.pc + 1) as u16;
-                addr = addr.wrapping_add(self.x as u16);
-                let val = read_byte(mem, addr);
-                print!(" @ {:04X} = {:02X}        ", addr, val);
-                val
-            },
-            AddressingMode::AbsoluteIndexedY => {
-                print!(" ${:04X},Y", read_word(mem, self.pc + 1));
-                let mut addr = read_word(mem, self.pc + 1) as u16;
-                addr = addr.wrapping_add(self.y as u16);
-                let val = read_byte(mem, addr);
-                print!(" @ {:04X} = {:02X}        ", addr, val);
-                val
-            },
-            // Implied, Relative, Indexed
-            _ => {
-                panic!("Attemped to read via unsupported mode: {:?}, {:?}",
-                self.pc, addr_mode)
-            }
+            AddressingMode::Accumulator => self.a,
+            AddressingMode::Immediate => read_byte(mem, self.pc + 1),
+            _ => read_byte(mem, self.get_addr(mem, addr_mode))
         }
     }
 
-    // TODO: Better name?
     pub fn set_byte(&mut self,
                     mem: &mut Memory,
                     addr_mode: AddressingMode,
                     val: u8)
     {
         match addr_mode {
-            AddressingMode::Accumulator => {
-                print!(" A       ");
-                print!("                   ");
-                self.a = val;
-            }
+            AddressingMode::Accumulator => self.a = val,
             AddressingMode::Immediate => {
-                panic!("Writes for immediate mode not yet implemented");
+                panic!("Immediate writes not supported");
             },
-            AddressingMode::ZeroPage => {
-                print!(" ${:02X}     ", read_byte(mem, self.pc + 1));
-                print!("                   ");
-                let addr = read_byte(mem, self.pc + 1) as u16;
+            _ => {
+                let addr = self.get_addr(mem, addr_mode);
                 write_byte(mem, addr, val);
+            }
+        }
+    }
+
+    pub fn get_addr(&self,
+                      mem: &Memory,
+                      addr_mode: AddressingMode)
+                      -> u16
+    {
+        match addr_mode {
+            AddressingMode::ZeroPage => {
+                read_byte(mem, self.pc + 1) as u16
             },
             AddressingMode::Absolute => {
-                print!(" ${:04X}   ", read_word(mem, self.pc + 1));
-                print!("                   ");
-                let addr = read_word(mem, self.pc + 1);
-                write_byte(mem, addr, val);
+                read_word(mem, self.pc + 1)
             },
             AddressingMode::IndexedIndirect => {
-                print!(" (${:02X}, X) @", read_byte(mem, self.pc + 1));
                 let operand = read_byte(mem, self.pc + 1);
                 let index = operand.wrapping_add(self.x);
                 // Deals with zero-page wrapping
-                let addr = {
-                    (read_byte(mem, index as u16) as u16) |
-                    (read_byte(mem, index.wrapping_add(1) as u16) as u16) << 8
-                };
-                print!(" {:02X} = {:04X} = {:02X}  ", index,
-                       addr,
-                       read_byte(mem, addr));
-                write_byte(mem, addr, val);
+                (read_byte(mem, index as u16) as u16) |
+                (read_byte(mem, index.wrapping_add(1) as u16) as u16) << 8
             },
             AddressingMode::IndirectIndexed => {
-                print!(" (${:02X}),Y", read_byte(mem, self.pc + 1));
                 let operand = read_byte(mem, self.pc + 1);
                 // Deals with zero-page wrapping
-                let mut addr = {
+                let addr = {
                     (read_byte(mem, operand as u16) as u16) |
                     (read_byte(mem, operand.wrapping_add(1) as u16) as u16) << 8
                 };
-                print!(" = {:04X}", addr);
-                addr = addr.wrapping_add(self.y as u16);
-                print!(" @ {:04X} = {:02X} ", addr, val);
-                write_byte(mem, addr, val);
+                addr.wrapping_add(self.y as u16)
             },
             AddressingMode::ZeroPageIndexedX => {
-                print!(" ${:02X},X", read_byte(mem, self.pc + 1));
-                let mut addr = read_byte(mem, self.pc + 1);
-                addr = addr.wrapping_add(self.x);
-                print!(" @ {:02X} = {:02X}            ", addr,
-                       read_byte(mem, addr as u16));
-                write_byte(mem, addr as u16, val);
+                let addr = read_byte(mem, self.pc + 1);
+                addr.wrapping_add(self.x) as u16
             },
             AddressingMode::ZeroPageIndexedY => {
-                print!(" ${:02X}, Y", read_byte(mem, self.pc + 1));
-                let mut addr = read_byte(mem, self.pc + 1);
-                addr = addr.wrapping_add(self.y);
-                print!(" @ {:02X} = {:02X}      ", addr,
-                       read_byte(mem, addr as u16));
-                write_byte(mem, addr as u16, val);
+                let addr = read_byte(mem, self.pc + 1);
+                addr.wrapping_add(self.y) as u16
             },
             AddressingMode::AbsoluteIndexedX => {
-                print!(" ${:04X}, X", read_word(mem, self.pc + 1));
-                let mut addr = read_word(mem, self.pc + 1) as u16;
-                addr = addr.wrapping_add(self.x as u16);
-                print!(" @ {:04X} = {:02X}       ", addr,
-                       read_byte(mem, addr));
-                write_byte(mem, addr, val);
+                let addr = read_word(mem, self.pc + 1) as u16;
+                addr.wrapping_add(self.x as u16)
             },
             AddressingMode::AbsoluteIndexedY => {
-                print!(" ${:04X}, Y", read_word(mem, self.pc + 1));
-                let mut addr = read_word(mem, self.pc + 1) as u16;
-                addr = addr.wrapping_add(self.y as u16);
-                print!(" @ {:04X} = {:02X}       ", addr,
-                       read_byte(mem, addr));
-                write_byte(mem, addr, val);
+                let addr = read_word(mem, self.pc + 1) as u16;
+                addr.wrapping_add(self.y as u16)
             },
-            // Implied, Accumulator, Relative, Indexed, Immediate
+            // Implied, Relative, Indexed
             _ => {
-                panic!("Attemped to write via unsupported mode: {:?}, {:?}",
+                panic!("Attemped to get_addr via unsupported mode: {:?}, {:?}",
                 self.pc, addr_mode)
             }
         }
     }
+}
+
+
+#[cfg(feature="DEBUG")]
+// Could probably split up but don't really care, it's just printing for now...
+// Probably a much better way to do this than readdressing memory, but....whateva
+fn debug_print(cpu: &Cpu,
+               op_code: u8,
+               instr: Instruction,
+               mem: &Memory,
+               addr_mode: AddressingMode)
+{
+    print!("{:04X}  {:02X}", cpu.pc, op_code);
+
+    use self::instructions::AddressingMode::*;
+    match addr_mode {
+        Implied => {
+            print!("        {:?}                            ",
+                   instr);
+        },
+        Accumulator => {
+            print!("        {:?} A                          ",
+                   instr);
+        },
+        ZeroPage => {
+            print!(" {0:02X}     {1:?} ${0:02X} = {2:02X}                   ",
+                   read_byte(mem, cpu.pc + 1),
+                   instr,
+                   read_byte(mem, read_byte(mem, cpu.pc + 1) as u16));
+        },
+        Relative => {
+            print!(" {0:02X}     {1:?} ${2:04X}                      ",
+                   read_byte(mem, cpu.pc + 1),
+                   instr,
+                   cpu.pc + read_byte(mem, cpu.pc + 1) as u16 + 2);
+        },
+        Absolute => {
+            if instr == Instruction::JMP  || instr == Instruction::JSR {
+                print!(" {0:02X} {1:02X}  {2:?} ${1:02X}{0:02X}                      ",
+                    read_byte(mem, cpu.pc + 1),
+                    read_byte(mem, cpu.pc + 2),
+                    instr);
+            } else {
+                print!(" {0:02X} {1:02X}  {2:?} ${1:02X}{0:02X} = {3:02X}                 ",
+                       read_byte(mem, cpu.pc + 1),
+                       read_byte(mem, cpu.pc + 2),
+                       instr,
+                       read_byte(mem, read_word(mem, cpu.pc + 1)));
+            }
+        },
+        Indirect => {
+            let addr = read_word(mem, cpu.pc + 1);
+            let val = {
+                if addr & 0xFF == 0xFF {
+                    (read_byte(mem, addr) as u16) |
+                    // keep upper byte and make low byte 0
+                    (read_byte(mem, addr & 0xFF00) as u16) << 8
+                } else {
+                    (read_byte(mem, addr) as u16) |
+                    (read_byte(mem, addr + 1) as u16) << 8
+                }
+            };
+            print!(" {0:02X} {1:02X}  {2:?} (${3:04X}) = {4:04X}             ",
+                   read_byte(mem, cpu.pc + 1),
+                   read_byte(mem, cpu.pc + 2),
+                   instr,
+                   read_word(mem, cpu.pc + 1),
+                   val);
+        },
+        Immediate => {
+            print!(" {0:02X}     {1:?} #${0:02X}                       ",
+                   read_byte(mem, cpu.pc + 1),
+                   instr,
+            );
+        },
+        IndexedIndirect => {
+            let operand = read_byte(mem, cpu.pc + 1);
+            let index = operand.wrapping_add(cpu.x);
+            // Deals with zero-page wrapping
+            let addr = {
+                (read_byte(mem, index as u16) as u16) |
+                (read_byte(mem, index.wrapping_add(1) as u16) as u16) << 8
+            };
+            let val = read_byte(mem, addr);
+            print!(" {0:02X}     {1:?} (${0:02X},X) @ {2:02X} = {3:04X} = {4:02X}   ",
+                   operand,
+                   instr,
+                   index,
+                   addr,
+                   val);
+        },
+        IndirectIndexed => {
+            let operand = read_byte(mem, cpu.pc + 1);
+            // Deals with zero-page wrapping
+            let addr = {
+                (read_byte(mem, operand as u16) as u16) |
+                (read_byte(mem, operand.wrapping_add(1) as u16) as u16) << 8
+            };
+            let indexed_addr = addr.wrapping_add(cpu.y as u16);
+            let val = read_byte(mem, indexed_addr);
+            print!(" {0:02X}     {1:?} (${0:02X}),Y = {2:04X} @ {3:04X} = {4:02X} ",
+                   operand,
+                   instr,
+                   addr,
+                   indexed_addr,
+                   val);
+        },
+        ZeroPageIndexedX => {
+            let addr = read_byte(mem, cpu.pc + 1);
+            let indexed_addr = addr.wrapping_add(cpu.x);
+            let val = read_byte(mem, indexed_addr as u16);
+            print!(" {0:02X}     {1:?} ${2:02X},X @ {3:02X} = {4:02X}            ",
+                   read_byte(mem, cpu.pc + 1),
+                   instr,
+                   addr,
+                   indexed_addr,
+                   val);
+        },
+        ZeroPageIndexedY => {
+            let addr = read_byte(mem, cpu.pc + 1);
+            let indexed_addr = addr.wrapping_add(cpu.y);
+            let val = read_byte(mem, indexed_addr as u16);
+            print!(" {0:02X}     {1:?} ${2:02X},Y @ {3:02X} = {4:02X}            ",
+                   read_byte(mem, cpu.pc + 1),
+                   instr,
+                   addr,
+                   indexed_addr,
+                   val);
+        },
+        AbsoluteIndexedX => {
+            let addr = read_word(mem, cpu.pc + 1) as u16;
+            let indexed_addr = addr.wrapping_add(cpu.x as u16);
+            let val = read_byte(mem, indexed_addr);
+            print!(" {0:02X} {1:02X}  {2:?} ${3:04X},X @ {4:04X} = {5:02X}        ",
+                   read_byte(mem, cpu.pc + 1),
+                   read_byte(mem, cpu.pc + 2),
+                   instr,
+                   addr,
+                   indexed_addr,
+                   val);
+        },
+        AbsoluteIndexedY => {
+            let addr = read_word(mem, cpu.pc + 1) as u16;
+            let indexed_addr = addr.wrapping_add(cpu.y as u16);
+            let val = read_byte(mem, indexed_addr);
+            print!(" {0:02X} {1:02X}  {2:?} ${3:04X},Y @ {4:04X} = {5:02X}        ",
+                   read_byte(mem, cpu.pc + 1),
+                   read_byte(mem, cpu.pc + 2),
+                   instr,
+                   addr,
+                   indexed_addr,
+                   val);
+        },
+    }
+    print!("{:?}\n", cpu);
 }
 
 impl fmt::Debug for Cpu {
