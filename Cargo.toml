@@ -7,4 +7,4 @@ authors = ["Ryan Campbell <rdcampbell1990@gmail.com>"]
 sdl2 = "0.21.0"
 
 [features]
-DEBUG = []
+debug = []

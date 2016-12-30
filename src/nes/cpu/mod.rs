@@ -94,7 +94,7 @@ impl Cpu {
         let op_code = read_byte(mem, self.pc);
         let (inst, addr_mode) = decode(op_code);
 
-        #[cfg(feature="DEBUG")]
+        #[cfg(feature="debug")]
         debug_print(&self, op_code, inst, mem, addr_mode);
 
         execute(self, mem, (inst, addr_mode));
@@ -215,7 +215,7 @@ impl Cpu {
 }
 
 
-#[cfg(feature="DEBUG")]
+#[cfg(feature="debug")]
 // Could probably split up but don't really care, it's just printing for now...
 // Probably a much better way to do this than readdressing memory, but....whateva
 fn debug_print(cpu: &Cpu,
