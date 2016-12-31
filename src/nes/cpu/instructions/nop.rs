@@ -1,10 +1,11 @@
-//! For the nop instruction
-//! All instructions reutrn the number of cycles taken
+//! The NOP instruction
 #![allow(non_snake_case)]
 
 use nes::cpu::Cpu;
 
+/// NOP
 impl Cpu {
+    /// NO oPeration.
     pub fn NOP(&self) {
     }
 }

@@ -1,9 +1,9 @@
-//! For register related instructions (increments / decrements of registers)
-//! All instructions reutrn the number of cycles taken
+//! Register related increments and decrements.
 #![allow(non_snake_case)]
 
 use nes::cpu::{Cpu, StatusFlag, Register};
 
+/// Increment / decrement instructions for registers
 impl Cpu {
     fn check_reg_flags(&mut self, reg: Register) {
         let check_reg = match reg {
@@ -24,41 +24,49 @@ impl Cpu {
         }
     }
 
+    /// DEcrement Y register.
     pub fn DEY(&mut self) {
         self.y = self.y.wrapping_sub(1);
         self.check_reg_flags(Register::Y);
     }
 
+    /// DEcrement X register.
     pub fn DEX(&mut self) {
         self.x = self.x.wrapping_sub(1);
         self.check_reg_flags(Register::X);
     }
 
+    /// INcrement X register.
     pub fn INX(&mut self) {
         self.x = self.x.wrapping_add(1);
         self.check_reg_flags(Register::X);
     }
 
+    /// INcrement Y register.
     pub fn INY(&mut self) {
         self.y = self.y.wrapping_add(1);
         self.check_reg_flags(Register::Y);
     }
 
+    /// Transfer Accumulator to X register.
     pub fn TAX(&mut self) {
         self.x = self.a;
         self.check_reg_flags(Register::X);
     }
 
+    /// Transfer X register to Accumulator .
     pub fn TXA(&mut self) {
         self.a = self.x;
         self.check_reg_flags(Register::A);
     }
 
+    /// Transfer Accumulator to Y register.
     pub fn TAY(&mut self) {
         self.y = self.a;
         self.check_reg_flags(Register::Y);
     }
 
+    /// Transfer Y register to Accumulator .
     pub fn TYA(&mut self) {
         self.a = self.y;
         self.check_reg_flags(Register::A);

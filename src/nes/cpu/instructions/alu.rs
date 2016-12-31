@@ -1,5 +1,4 @@
-//! For alu related instructions
-//! All instructions reutrn the number of cycles taken
+//! Arithmetic instructions
 #![allow(non_snake_case)]
 
 use nes::cpu::{Cpu, Register, StatusFlag};
@@ -7,6 +6,7 @@ use nes::memory::Memory;
 use super::AddressingMode;
 
 // PRETTIFYME: Abstract the similiar bits
+/// ALU Instructions
 impl Cpu {
     // Checks zero and negative flag. Individual functions are responsible
     // for others
@@ -29,6 +29,7 @@ impl Cpu {
         }
     }
     
+    /// BIt Test.
     pub fn BIT(&mut self, mem: &Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         let result = val & self.a;
@@ -53,24 +54,28 @@ impl Cpu {
 
     }
 
+    /// OR with Accumulator.
     pub fn ORA(&mut self, mem: &Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         self.a = self.a | val;
         self.alu_check_flags(Register::A);
     }
 
+    /// AND with accumulator.
     pub fn AND(&mut self, mem: &Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         self.a = self.a & val;
         self.alu_check_flags(Register::A);
     }
 
+    /// Exclusive OR with accumulator.
     pub fn EOR(&mut self, mem: &Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         self.a = self.a ^ val;
         self.alu_check_flags(Register::A);
     }
 
+    /// ADd with Carry
     pub fn ADC(&mut self, mem: &Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         let sum = val.wrapping_add(self.a + {
@@ -121,6 +126,7 @@ impl Cpu {
         self.a = sum;
     }
 
+    /// CoMPare accumulator.
     pub fn CMP(&mut self, mem: &Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
 
@@ -145,6 +151,7 @@ impl Cpu {
         }
     }
 
+    /// ComPare Y register.
     pub fn CPY(&mut self, mem: &Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
 
@@ -169,6 +176,7 @@ impl Cpu {
         }
     }
 
+    /// ComPare X register.
     pub fn CPX(&mut self, mem: &Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
 
@@ -195,6 +203,7 @@ impl Cpu {
 
     // PRETTIFYME: Jesus....
     // TODO: Check this carefully!
+    /// SuBtract with Carry
     pub fn SBC(&mut self, mem: &Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         let diff = self.a.wrapping_sub(val) - (1 - {
@@ -246,6 +255,7 @@ impl Cpu {
         self.a = diff;
     }
 
+    /// Arithmetic Shift Left. 
     pub fn ASL(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
 
@@ -273,6 +283,7 @@ impl Cpu {
         self.set_byte(mem, addr_mode, val);
     }
 
+    /// Logical Shift Right.
     pub fn LSR(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
 
@@ -300,6 +311,7 @@ impl Cpu {
         self.set_byte(mem, addr_mode, val);
     }
 
+    /// ROtate Left.
     pub fn ROL(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
         let old_carry = self.check_flag(StatusFlag::Carry, true);
@@ -335,6 +347,7 @@ impl Cpu {
         self.set_byte(mem, addr_mode, val);
     }
 
+    /// ROtate Right
     pub fn ROR(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
         let old_carry = self.check_flag(StatusFlag::Carry, true);

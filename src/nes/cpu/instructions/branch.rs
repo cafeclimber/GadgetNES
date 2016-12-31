@@ -1,11 +1,11 @@
-//! For branch related instructions
-//! All instructions reutrn the number of cycles taken
+//! Branch instructions.
 #![allow(non_snake_case)]
 
 use nes::cpu::{Cpu, StatusFlag};
 use nes::cpu::memory_map::read_byte;
 use nes::memory::Memory;
 
+/// Branch instructions.
 impl Cpu {
     fn branch(&mut self,
               mem: &Memory,
@@ -22,34 +22,42 @@ impl Cpu {
         }
     }
 
+    /// Branch on PLus. 
     pub fn BPL(&mut self, mem: &Memory) {
         self.branch(mem, StatusFlag::Negative, false);
     }
 
+    /// Branch on MInus.
     pub fn BMI(&mut self, mem: &Memory) {
         self.branch(mem, StatusFlag::Negative, true);
     }
 
+    /// Branch on oVerflow Clear.
     pub fn BVC(&mut self, mem: &Memory) {
         self.branch(mem, StatusFlag::Overflow, false);
     }
 
+    /// Branch on oVerflow Set.
     pub fn BVS(&mut self, mem: &Memory) {
         self.branch(mem, StatusFlag::Overflow, true);
     }
     
+    /// Branch on Carry Clear. 
     pub fn BCC(&mut self, mem: &Memory) {
         self.branch(mem, StatusFlag::Carry, false);
     }
 
+    /// Branch on Carry Set. 
     pub fn BCS(&mut self, mem: &Memory) {
         self.branch(mem, StatusFlag::Carry, true);
     }
 
+    /// Branch on Not Equal. 
     pub fn BNE(&mut self, mem: &Memory) {
         self.branch(mem, StatusFlag::Zero, false);
     }
 
+    /// Branch on EQual. 
     pub fn BEQ(&mut self, mem: &Memory) {
         self.branch(mem, StatusFlag::Zero, true);
     }

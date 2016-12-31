@@ -1,3 +1,5 @@
+//! Constants used in mapping memory.
+
 // For RAM
 pub const ZERO_PAGE_BEG: u16 = 0x0000;
 pub const ZERO_PAGE_END: u16 = 0x00FF;

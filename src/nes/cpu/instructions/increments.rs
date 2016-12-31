@@ -1,11 +1,11 @@
-//! For increment related instructions
-//! All instructions reutrn the number of cycles taken
+//! Instructions to increment / decrement memory values.
 #![allow(non_snake_case)]
 
 use nes::cpu::{Cpu, StatusFlag};
 use nes::memory::Memory;
 use super::AddressingMode;
 
+/// Instructions to increment / decrement memory values.
 impl Cpu {
     fn check_inc_flags(&mut self, val: u8) {
         if val == 0 {
@@ -21,6 +21,7 @@ impl Cpu {
         }
     }
 
+    /// DECrement memory.
     pub fn DEC(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         let result = val.wrapping_sub(1);
@@ -30,6 +31,7 @@ impl Cpu {
         self.set_byte(mem, addr_mode, result);
     }
 
+    /// INCrement memory.
     pub fn INC(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         let result = val.wrapping_add(1);

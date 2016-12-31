@@ -1,7 +1,17 @@
+//! Defines the various kinds of memory in the NES and provides an interface
+//! for them,
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use nes::MemMapped;
+use nes::ppu::Ppu;
+//use nes::apu::Apu; // TODO
+use nes::io::Io;
 use ines::InesRom;
 
-mod mapper;
+use sdl2::Sdl;
+
+pub mod mapper;
 use self::mapper::*;
 
 mod constants;
@@ -12,34 +22,62 @@ use self::constants::*;
 /// This does NOT include memory mapped I/O.
 /// Things that are mapped are handled by their respective components
 /// memory_map modules.
-pub struct Memory {
+pub struct Memory<'a> {
+    pub ppu: Ppu<'a>,
+    // apu: Apu, // TODO
+    io:  Io,
     ram: Ram,
-    // exp: ExpansionRom TODO
-    // sram: Sram TODO
-    prg: Box<Mapper>,
+    // exp: ExpansionRom // TODO
+    // sram: Sram // TODO
+    prg: Rc<RefCell<Box<Mapper>>>,
 }
 
-impl Memory {
-    pub fn new(rom: &InesRom) -> Memory {
+impl<'a> Memory<'a> {
+    pub fn new(rom: &InesRom, sdl_context: &Sdl) -> Memory<'a> {
+        let mapper = choose_mapper(rom);
+        let mapper = Rc::new(RefCell::new(mapper));
         Memory {
+            ppu: Ppu::new(mapper.clone(), sdl_context, rom.mirroring()),
+            // apu: Apu::new(), // TODO
+            io:  Io::new(),
             ram: Ram::new(),
-            prg: choose_mapper(rom),
+            prg: mapper.clone(),
         }
     }
 
+    pub fn read_ppu_byte(&self, addr: u16) -> u8 {
+        self.ppu.read_byte(addr)
+    }
+    
+    pub fn write_ppu_byte(&mut self, addr: u16, val: u8) {
+        self.ppu.write_byte(addr, val);
+    }
+
+    pub fn read_io_byte(&self, addr: u16) -> u8 {
+        self.io.read_byte(addr)
+    }
+    
+    pub fn write_io_byte(&mut self, addr: u16, val: u8) {
+        self.io.write_byte(addr, val);
+    }
+
+    /// Reads a byte from RAM.
     pub fn read_ram_byte(&self, addr: u16) -> u8 {
         self.ram.read_byte(addr)
     }
 
-    pub fn read_rom_byte(&self, addr: u16) -> u8 {
-        self.prg.read_rom_byte(addr)
-    }
-
+    /// Writes a byte to RAM.
     pub fn write_ram_byte(&mut self, addr: u16, val: u8) {
         self.ram.write_byte(addr, val);
     }
+
+    /// Reads a byte from PRG-ROM as defined by the mapper.
+    pub fn read_rom_byte(&self, addr: u16) -> u8 {
+        self.prg.borrow_mut().read_rom_byte(addr)
+    }
 }
 
+/// Provides an interface for the CPU's RAM
 struct Ram {
     zero_page: Vec<u8>,
     stack: Vec<u8>,
@@ -57,6 +95,10 @@ impl Ram {
 }
 
 impl MemMapped for Ram {
+    /// Reads a byte from RAM.
+    ///
+    /// #Panics
+    /// Will panic if the address is not in RAM.
     fn read_byte(&self, addr: u16) -> u8 {
         match addr {
             ZERO_PAGE_BEG...ZERO_PAGE_END => {
@@ -74,6 +116,10 @@ impl MemMapped for Ram {
         }
     }
 
+    /// Writes a byte to RAM.
+    ///
+    /// #Panics
+    /// Will panic if the address is not in RAM.
     fn write_byte(&mut self, addr: u16, val: u8) {
         match addr {
             ZERO_PAGE_BEG...ZERO_PAGE_END => {

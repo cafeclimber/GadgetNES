@@ -8,18 +8,7 @@ use nes::memory::Memory;
 use self::instructions::{Instruction, decode, execute, AddressingMode};
 use self::memory_map::{read_byte, write_byte, read_word};
 
-/// The 6502 Processor
-///
-/// Contains 8 registers:
-/// pc: Program Counter
-/// sp: Stack Pointer
-/// sr: Status Flags
-/// x: Index
-/// y: Index
-/// a: Accumulator
-///
-/// Also contains a field which keeps track of the number of cycles.
-/// This is useful for a number of reasons including accuracy and for rendering
+/// Represents the 6502 processor as used in the NES
 ///
 /// The CPU also contains a memory_map struct which provides an interface
 /// For RAM, I/O, etc.
@@ -30,6 +19,8 @@ pub struct Cpu {
     x: u8,
     y: u8,
     a: u8,
+
+    pub cycle: u32,
 }
 
 // Registers used for flag checking. May change
@@ -39,7 +30,7 @@ enum Register {
     A,
 }
 
-// Used for status flags
+/// Each of the flags in the status register.
 enum StatusFlag {
     Carry      = 1 << 0,
     Zero       = 1 << 1,
@@ -60,19 +51,24 @@ impl Cpu {
             x: 0,
             y: 0,
             a: 0,
+
+            cycle: 0,
         }
     }
 
+    /// Pushes `val` to stack.
     fn push_stack(&mut self, mem: &mut Memory, val: u8) {
         mem.write_ram_byte((self.sp as u16) + 0x100, val);
         self.sp -= 1;
     }
 
+    /// Pops a value from the stack.
     fn pop_stack(&mut self, mem: &mut Memory) -> u8 {
         self.sp += 1;
         mem.read_ram_byte((self.sp as u16) + 0x100)
     }
 
+    /// Sets `flag` to `set`. 
     fn set_flag(&mut self, flag: StatusFlag, set: bool) {
         match set {
             true => self.p |= flag as u8,
@@ -80,6 +76,13 @@ impl Cpu {
         }
     }
 
+    /// Checks if `flag` matches `is_set`
+    ///
+    /// #Examples
+    /// ``` rust
+    /// self.check_flag(StatusFlag::Carry, true) // checks if Carry flag is set
+    /// self.check_flag(StatusFlag::Zero, false) // checks if Zero flag is not set
+    /// ```
     fn check_flag(&self, flag: StatusFlag, is_set: bool) -> bool {
         match is_set {
             true => self.p & flag as u8 != 0,
@@ -88,8 +91,9 @@ impl Cpu {
         
     }
 
-    // fetches, decodes, and executes instruction printing state AFTER
-    // running instruction
+    /// This is the primary operation of the CPU. It represents the
+    /// execution of one instruction. Essentially, this function
+    /// fetches the next instruction, decodes, then executes it.
     pub fn step(&mut self, mem: &mut Memory) {
         let op_code = read_byte(mem, self.pc);
         let (inst, addr_mode) = decode(op_code);
@@ -109,7 +113,8 @@ impl Cpu {
         }
     }
 
-    pub fn bump_pc(&mut self, addr_mode: AddressingMode) {
+    /// Increments PC depending on the addressing mode. 
+    fn bump_pc(&mut self, addr_mode: AddressingMode) {
         let bump: u16 = match addr_mode {
             // Jumps handled above, branches set own PC, so don't change
             AddressingMode::Indirect => 0,
@@ -132,6 +137,7 @@ impl Cpu {
         self.pc += bump;
     }
 
+    /// Returns a byte from mapped memory.
     pub fn fetch_byte(&self,
                       mem: &Memory,
                       addr_mode: AddressingMode)
@@ -144,6 +150,11 @@ impl Cpu {
         }
     }
 
+    /// Sets a byte in mapped memory. 
+    /// 
+    /// #Panics
+    /// Panics if there is an attempt to make write with immediate mode.
+    /// This should not be possible as no instructions write in this mode.
     pub fn set_byte(&mut self,
                     mem: &mut Memory,
                     addr_mode: AddressingMode,
@@ -161,6 +172,12 @@ impl Cpu {
         }
     }
 
+    /// Returns an addressing depending on the addressing mode passed to it.
+    ///
+    /// #Panics
+    /// Panics on those modes which do not actually interact with memory, or
+    /// those modes where this interaction is handled by the individual function.
+    /// These are Implied, Indexed, and Relative modes.
     pub fn get_addr(&self,
                       mem: &Memory,
                       addr_mode: AddressingMode)
@@ -243,10 +260,12 @@ fn debug_print(cpu: &Cpu,
                    read_byte(mem, read_byte(mem, cpu.pc + 1) as u16));
         },
         Relative => {
+            let offset = read_byte(mem, cpu.pc + 1) as i8;
+            let branch_target = (((cpu.pc + 2) as i32) + (offset as i32)) as u16;
             print!(" {0:02X}     {1:?} ${2:04X}                      ",
                    read_byte(mem, cpu.pc + 1),
                    instr,
-                   cpu.pc + read_byte(mem, cpu.pc + 1) as u16 + 2);
+                   branch_target);
         },
         Absolute => {
             if instr == Instruction::JMP  || instr == Instruction::JSR {

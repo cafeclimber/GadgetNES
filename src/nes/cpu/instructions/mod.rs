@@ -1,5 +1,5 @@
-//! Extracts instruction fetch and decode for use by CPU module
-
+//! Handles instruction fetch and decode for the CPU.
+//! Instructions are split into files by their approximate functionality.
 use nes::cpu::Cpu;
 use nes::memory::Memory;
 
@@ -13,7 +13,7 @@ mod nop;
 mod registers;
 mod stack;
 
-/// Various addressing modes used when interfacing with memory
+/// All addressing modes used by the 6502 processor
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AddressingMode {
     ZeroPageIndexedX,
@@ -33,6 +33,7 @@ pub enum AddressingMode {
 
 // TODO: Add unofficial ops
 #[derive(Debug, PartialEq, Copy, Clone)]
+/// All 6502 instructions
 pub enum Instruction {
     BRK, PHP, PLP, PHA, PLA, TXS, TSX, BPL,
     BMI, BVC, BVS, BCC, BCS, BNE, BEQ, CLC,
@@ -45,6 +46,9 @@ pub enum Instruction {
 
 /// Takes an op_code fetched by the cpu and returns the
 /// instruction and addressing mode
+///
+/// #Panics
+/// Will panic if an instruction is not recognized.
 pub fn decode(op_code: u8) -> (Instruction, AddressingMode) {
     use self::Instruction;
     match op_code {
@@ -242,11 +246,12 @@ pub fn decode(op_code: u8) -> (Instruction, AddressingMode) {
         // Observe all its majesty
         0xEA => (Instruction::NOP, AddressingMode::Implied),
 
-        /********END OF OFFICIAL OPCODES*********/
+        /******** END OF OFFICIAL OPCODES *********/
         _ => panic!("Unrecognized opcode: ${:02X}", op_code)
     }
 }
 
+/// Executes the instruction by calling a cpu function
 pub fn execute(cpu: &mut Cpu,
                mem: &mut Memory,
                instr: (Instruction, AddressingMode))
