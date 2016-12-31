@@ -11,9 +11,11 @@ use sdl2::keyboard::Keycode;
 use sdl2::EventPump;
 
 use self::cpu::Cpu;
+use self::cpu::Interrupt::NMI;
 use self::ppu::Ppu;
 use self::memory::Memory;
-use super::ines::InesRom;
+use ines::InesRom;
+
 
 /// Contains the CPU, PPU, and Memory.
 pub struct Nes<'a> {
@@ -51,10 +53,19 @@ impl<'a> Nes<'a> {
     pub fn run(&mut self) {
         self.mem.ppu.power_up();
         while self.state == NesState::Running {
-            println!("########################################\
-#################################");
             self.cpu.step(&mut self.mem);
-            self.mem.ppu.step(self.cpu.cycle);
+            let nmi = self.mem.ppu.step(self.cpu.cycle);
+            if nmi {
+                #[cfg="debug"]
+                println!("###################################### VB\
+                          LANK ######################################");
+                self.cpu.interrupt(&mut self.mem, NMI);
+                self.cpu.cycle = 0;
+            } else {
+                #[cfg="debug"]
+                println!("#########################################\
+                          ##########################################");
+            }
 
             for event in self.event_pump.poll_iter() {
                 match event {

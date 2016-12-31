@@ -13,6 +13,9 @@ use graphics::{SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_SIZE};
 mod memory_map;
 use self::memory_map::MemoryMap;
 
+const CPU_CYCLES_PER_SCANLINE: u32 = 114;
+const LAST_VISIBLE_SCANLINE: u8 = 239;
+
 /// The NES Picture Processing Unit or PPU.
 pub struct Ppu<'a> {
     /// CPU:$2000.
@@ -46,6 +49,7 @@ pub struct Ppu<'a> {
 
     cycle: u32,
     scanline: Scanline,
+    frame: [u8; SCREEN_SIZE],
 
     /// PPU has its own memory map which is modeled here as owning
     /// VRAM, OAM, and CHR
@@ -90,6 +94,7 @@ impl<'a> Ppu<'a> {
 
             cycle: 0,
             scanline: Scanline::PreRender,
+            frame: [0; SCREEN_SIZE],
 
             memory_map: MemoryMap::new(mapper, mirroring),
 
@@ -103,18 +108,52 @@ impl<'a> Ppu<'a> {
     /// purpose of this function is to fill the frame buffer
     /// and generate an NMI when it enters VBLANK.
     pub fn step(&mut self, cpu_cycle: u32) -> bool {
+        #[cfg="debug"]
+        println!("{:?}", self);
+        let mut nmi = false;
         while self.cycle < cpu_cycle {
             use self::Scanline::*;
             match self.scanline {
-                PreRender => {},
-                Visible(line) => {},
-                PostRender => {},
-                VBlank => {},
+                PreRender => { self.prerender(); },
+                Visible(line) => { self.scanline(line); },
+                PostRender => { self.postrender(); },
+                VBlank => { self.vblank(); nmi = true },
             };
+            self.cycle += CPU_CYCLES_PER_SCANLINE;
         }
-        #[cfg="debug"]
-        println!("{:?}", self);
-        false // TODO: Properly implement NMI
+        if nmi { self.cycle = 0; }
+        nmi
+    }
+
+    fn prerender(&mut self) {
+        self.cycle += CPU_CYCLES_PER_SCANLINE;
+        self.set_vblank(false);
+        self.scanline = Scanline::Visible(0);
+    }
+
+    fn scanline(&mut self, line: u8) {
+        self.cycle += CPU_CYCLES_PER_SCANLINE;
+        if line == LAST_VISIBLE_SCANLINE { self.scanline = Scanline::PostRender }
+        else { self.scanline = Scanline::Visible(line + 1); }
+    }
+
+    fn postrender(&mut self) {
+        self.cycle += CPU_CYCLES_PER_SCANLINE;
+        self.scanline = Scanline::VBlank;
+    }
+
+    fn vblank(&mut self) {
+        self.cycle += CPU_CYCLES_PER_SCANLINE;
+        self.set_vblank(true);
+        self.scanline = Scanline::PreRender;
+        self.graphics.display_frame(&mut self.frame);
+    }
+
+    fn set_vblank(&mut self, set: bool) {
+        match set {
+            true => self.ppu_status |= 1 << 7,
+            false => self.ppu_status &= !(1 << 7),
+        }
     }
 
     /// Sets the vblank and sprite overflow bits of PPUSTATUS as this
@@ -166,7 +205,7 @@ impl<'a> Ppu<'a> {
     /* ######################### PPUSTATUS helpers ######################### */
     pub fn sprite_overflow(&self) -> bool { self.ppu_mask & (1 << 5) != 0 }
     pub fn sprite_0_hit(&self) -> bool { self.ppu_mask & (1 << 6) != 0 }
-    pub fn vblank(&self) -> bool { self.ppu_mask & (1 << 6) != 0 }
+    pub fn gen_vblank(&self) -> bool { self.ppu_mask & (1 << 6) != 0 }
 }
 
 // TODO: Correctly implement these
@@ -205,7 +244,10 @@ impl<'a> MemMapped for Ppu<'a> {
 
 impl<'a> fmt::Debug for Ppu<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "PPUCTRL:{:02X} PPUMASK:{:02X} PPUSTATUS:{:02X}\nOAMADDR:{:02X} OAMDATA:{:02X} PPUSCROLL:{:02X}              SCANLINE:{:?}\nPPUADDR:{:02X} PPUDATA:{:02X} OAMDMA:   {:02X}",
+        write!(f, "PPUCTRL:{:02X} PPUMASK:{:02X} PPUSTATUS:{:02X}\n\
+OAMADDR:{:02X} OAMDATA:{:02X} PPUSCROLL:{:02X}              \
+SCANLINE:{:?} PPU CYC:{:5?}\n\
+PPUADDR:{:02X} PPUDATA:{:02X} OAMDMA:   {:02X}",
                self.ppu_ctrl,
                self.ppu_mask,
                self.ppu_status,
@@ -213,6 +255,7 @@ impl<'a> fmt::Debug for Ppu<'a> {
                self.oam_data,
                self.ppu_scroll,
                self.scanline,
+               self.cycle,
                self.ppu_addr,
                self.ppu_data,
                self.oam_data)

@@ -1,7 +1,8 @@
 //! For jump related instructions
 #![allow(non_snake_case)]
 
-use nes::cpu::{Cpu,StatusFlag};
+use nes::cpu::Cpu;
+use nes::cpu::Interrupt::BRK;
 use nes::cpu::instructions::AddressingMode;
 use nes::cpu::memory_map::{read_byte, read_word};
 use nes::memory::Memory;
@@ -10,15 +11,7 @@ use nes::memory::Memory;
 impl Cpu {
     /// BReak.
     pub fn BRK(&mut self, mem: &mut Memory) {
-        self.set_flag(StatusFlag::Break, true);
-        let flags = self.p;
-        self.push_stack(mem, flags);
-        self.set_flag(StatusFlag::Break, false); // B flag only on in the stack
-        let addr_low = (self.pc & 0b1111_1111) as u8;
-        let addr_high = ((self.pc & 0b1111_1111_0000_0000) >> 8) as u8;
-        self.push_stack(mem, addr_high);
-        self.push_stack(mem, addr_low);
-        self.pc = read_word(mem, 0xFFFE); // IRQ / BRK Vector
+        self.interrupt(mem, BRK);
     }
     
     /// Jump to SubRoutine.

@@ -8,7 +8,12 @@ use nes::memory::Memory;
 use self::instructions::{Instruction, decode, execute, AddressingMode};
 use self::memory_map::{read_byte, write_byte, read_word};
 
-/// Represents the 6502 processor as used in the NES
+const NMI_VECTOR: u16 = 0xFFFA;
+const BRK_IRQ_VECTOR: u16 = 0xFFFE;
+
+/// A *nearly* cycle-accurate representation of
+/// the 6502 processor as used in the NES (ignores
+/// branch cycles and page boundary crossings)
 ///
 /// The CPU also contains a memory_map struct which provides an interface
 /// For RAM, I/O, etc.
@@ -28,6 +33,13 @@ enum Register {
     X,
     Y,
     A,
+}
+
+#[derive(Debug)]
+pub enum Interrupt {
+    BRK,
+    IRQ,
+    NMI,
 }
 
 /// Each of the flags in the status register.
@@ -91,12 +103,44 @@ impl Cpu {
         
     }
 
+    pub fn interrupt(&mut self, mem: &mut Memory, interrupt: Interrupt) {
+        let addr_low = (self.pc & 0b1111_1111) as u8;
+        let addr_high = ((self.pc & 0b1111_1111_0000_0000) >> 8) as u8;
+        self.push_stack(mem, addr_high);
+        self.push_stack(mem, addr_low);
+        let vector = match interrupt {
+            Interrupt::BRK => {
+                self.set_flag(StatusFlag::Break, true);
+                let flags = self.p;
+                self.push_stack(mem, flags);
+                self.set_flag(StatusFlag::Break, false); 
+                BRK_IRQ_VECTOR
+            },
+            Interrupt::IRQ => {
+                self.set_flag(StatusFlag::Break, false);
+                let flags = self.p;
+                self.push_stack(mem, flags);
+                BRK_IRQ_VECTOR
+            },
+            Interrupt::NMI => {
+                self.set_flag(StatusFlag::Break, false);
+                let flags = self.p;
+                self.push_stack(mem, flags);
+                NMI_VECTOR
+            },
+        };
+        println!("\n!!!!!!!!!!!!!!!!!!  Asserting {:?} interrupt with vector: {:#04X} !!!!!!!!!!!!!!!!!!!\n",
+                 interrupt,
+                 vector);
+        self.pc = vector;
+    }
+
     /// This is the primary operation of the CPU. It represents the
     /// execution of one instruction. Essentially, this function
     /// fetches the next instruction, decodes, then executes it.
     pub fn step(&mut self, mem: &mut Memory) {
         let op_code = read_byte(mem, self.pc);
-        let (inst, addr_mode) = decode(op_code);
+        let (inst, addr_mode) = decode(self, op_code);
 
         #[cfg(feature="debug")]
         debug_print(&self, op_code, inst, mem, addr_mode);
@@ -390,11 +434,12 @@ fn debug_print(cpu: &Cpu,
 
 impl fmt::Debug for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+        write!(f, " A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:5?}",
                self.a,
                self.x,
                self.y,
                self.p,
-               self.sp)
+               self.sp,
+               self.cycle)
     }
 }

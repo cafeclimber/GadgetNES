@@ -31,7 +31,7 @@ pub fn read_word(mem: &Memory, addr: u16) -> u16 {
             (mem.read_rom_byte(addr) as u16) |
             (mem.read_rom_byte(addr + 1) as u16) << 8
         },
-        _ => unreachable!()
+        _ => panic!("Erroneous read...how did you get here: {:#04X}", addr),
     }
 }
 
@@ -57,7 +57,7 @@ pub fn read_byte(mem: &Memory, addr: u16) -> u8 {
         CART_SPACE_BEG...CART_SPACE_END => {
             mem.read_rom_byte(addr)
         },
-        _ => unreachable!()
+        _ => panic!("Erroneous read...how did you get here: {:#04X}", addr)
     }
 }
 
@@ -79,6 +79,9 @@ pub fn write_byte(mem: &mut Memory, addr: u16, val: u8) {
         IO_REGS_BEG...IO_REGS_END => {
             mem.write_io_byte(addr, val);
         },
-        _ => unreachable!()
+        CART_SPACE_BEG...CART_SPACE_END => {
+            panic!("Cant write to cart space: {:#04X}", addr);
+        },
+        _ => panic!("Erroneous write...how did you get here: {:#04X}", addr),
     }
 }
