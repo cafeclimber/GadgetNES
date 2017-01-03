@@ -1,8 +1,8 @@
 extern crate sdl2;
+extern crate rand;
 
 use std::env;
 use self::nes::Nes;
-use sdl2::Sdl;
 
 mod nes;
 mod ines;

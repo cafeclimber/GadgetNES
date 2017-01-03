@@ -8,7 +8,7 @@ use self::constants::*;
 ///
 /// #Panics
 /// Will panic on an attempt to read a word from PPU or I/O
-pub fn read_word(mem: &Memory, addr: u16) -> u16 {
+pub fn read_word(mem: &mut Memory, addr: u16) -> u16 {
     match addr {
         CPU_RAM_BEG...CPU_RAM_END => {
             (mem.read_ram_byte(addr) as u16) |
@@ -37,19 +37,19 @@ pub fn read_word(mem: &Memory, addr: u16) -> u16 {
 
 
 /// Reads a byte from the specified address.
-pub fn read_byte(mem: &Memory, addr: u16) -> u8 {
+pub fn read_byte(mem: &mut Memory, addr: u16) -> u8 {
     match addr {
         CPU_RAM_BEG...CPU_RAM_END => {
             mem.read_ram_byte(addr)
         },
         RAM_MIRRORS_BEG...RAM_MIRRORS_END => {
-            mem.read_ram_byte(addr % 0x0800)
+            mem.read_ram_byte(addr & 0x07FF)
         },
         PPU_REGS_BEG...PPU_REGS_END => {
             mem.read_ppu_byte(addr)
         },
         PPU_MIRRORS_BEG...PPU_MIRRORS_END => {
-            mem.read_ppu_byte(addr % 8)
+            mem.read_ppu_byte((addr % 8) + 0x2000)
         },
         IO_REGS_BEG...IO_REGS_END => {
             mem.read_io_byte(addr)

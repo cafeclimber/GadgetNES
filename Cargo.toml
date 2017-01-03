@@ -1,9 +1,10 @@
 [package]
+authors = ["Ryan Campbell <rdcampbell1990@gmail.com>"]
 name = "gadget_nes"
 version = "0.2.0"
-authors = ["Ryan Campbell <rdcampbell1990@gmail.com>"]
 
 [dependencies]
+rand = "0.3.15"
 sdl2 = "0.21.0"
 
 [features]

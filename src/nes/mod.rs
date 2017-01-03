@@ -12,7 +12,6 @@ use sdl2::EventPump;
 
 use self::cpu::Cpu;
 use self::cpu::Interrupt::NMI;
-use self::ppu::Ppu;
 use self::memory::Memory;
 use ines::InesRom;
 
@@ -27,7 +26,7 @@ pub struct Nes<'a> {
 }
 
 trait MemMapped {
-    fn read_byte(&self, addr: u16) -> u8;
+    fn read_byte(&mut self, addr: u16) -> u8;
     fn write_byte(&mut self, addr: u16, val: u8);
 }
 
@@ -56,15 +55,15 @@ impl<'a> Nes<'a> {
             self.cpu.step(&mut self.mem);
             let nmi = self.mem.ppu.step(self.cpu.cycle);
             if nmi {
-                #[cfg="debug"]
+                #[cfg(feature="debug")]
                 println!("###################################### VB\
-                          LANK ######################################");
+                          LANK ########################################");
                 self.cpu.interrupt(&mut self.mem, NMI);
                 self.cpu.cycle = 0;
             } else {
-                #[cfg="debug"]
-                println!("#########################################\
-                          ##########################################");
+                #[cfg(feature="debug")]
+                println!("###########################################\
+                          ###########################################");
             }
 
             for event in self.event_pump.poll_iter() {

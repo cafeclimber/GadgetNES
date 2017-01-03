@@ -30,7 +30,7 @@ impl Cpu {
     }
     
     /// BIt Test.
-    pub fn BIT(&mut self, mem: &Memory, addr_mode: AddressingMode) {
+    pub fn BIT(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         let result = val & self.a;
 
@@ -55,28 +55,28 @@ impl Cpu {
     }
 
     /// OR with Accumulator.
-    pub fn ORA(&mut self, mem: &Memory, addr_mode: AddressingMode) {
+    pub fn ORA(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         self.a = self.a | val;
         self.alu_check_flags(Register::A);
     }
 
     /// AND with accumulator.
-    pub fn AND(&mut self, mem: &Memory, addr_mode: AddressingMode) {
+    pub fn AND(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         self.a = self.a & val;
         self.alu_check_flags(Register::A);
     }
 
     /// Exclusive OR with accumulator.
-    pub fn EOR(&mut self, mem: &Memory, addr_mode: AddressingMode) {
+    pub fn EOR(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         self.a = self.a ^ val;
         self.alu_check_flags(Register::A);
     }
 
     /// ADd with Carry
-    pub fn ADC(&mut self, mem: &Memory, addr_mode: AddressingMode) {
+    pub fn ADC(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         let sum = val.wrapping_add(self.a + {
             if self.check_flag(StatusFlag::Carry, true) {
@@ -127,7 +127,7 @@ impl Cpu {
     }
 
     /// CoMPare accumulator.
-    pub fn CMP(&mut self, mem: &Memory, addr_mode: AddressingMode) {
+    pub fn CMP(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
 
         if self.a >= val {
@@ -152,7 +152,7 @@ impl Cpu {
     }
 
     /// ComPare Y register.
-    pub fn CPY(&mut self, mem: &Memory, addr_mode: AddressingMode) {
+    pub fn CPY(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
 
         if self.y >= val {
@@ -177,7 +177,7 @@ impl Cpu {
     }
 
     /// ComPare X register.
-    pub fn CPX(&mut self, mem: &Memory, addr_mode: AddressingMode) {
+    pub fn CPX(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
 
         if self.x >= val {
@@ -204,7 +204,7 @@ impl Cpu {
     // PRETTIFYME: Jesus....
     // TODO: Check this carefully!
     /// SuBtract with Carry
-    pub fn SBC(&mut self, mem: &Memory, addr_mode: AddressingMode) {
+    pub fn SBC(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         let diff = self.a.wrapping_sub(val) - (1 - {
             if self.check_flag(StatusFlag::Carry, true) {

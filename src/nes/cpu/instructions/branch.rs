@@ -8,7 +8,7 @@ use nes::memory::Memory;
 /// Branch instructions.
 impl Cpu {
     fn branch(&mut self,
-              mem: &Memory,
+              mem: &mut Memory,
               flag: StatusFlag,
               branch_if_set: bool)
     {
@@ -17,48 +17,52 @@ impl Cpu {
         let branch_target = (((self.pc + 2) as i32) + (offset as i32)) as u16;
         let branch = self.check_flag(flag, branch_if_set);
         match branch {
-            true => self.pc = branch_target,
-            false => self.pc += 2,
+            true => {
+                self.pc = branch_target;
+            }
+            false => {
+                self.pc += 2;
+            }
         }
     }
 
     /// Branch on PLus. 
-    pub fn BPL(&mut self, mem: &Memory) {
+    pub fn BPL(&mut self, mem: &mut Memory) {
         self.branch(mem, StatusFlag::Negative, false);
     }
 
     /// Branch on MInus.
-    pub fn BMI(&mut self, mem: &Memory) {
+    pub fn BMI(&mut self, mem: &mut Memory) {
         self.branch(mem, StatusFlag::Negative, true);
     }
 
     /// Branch on oVerflow Clear.
-    pub fn BVC(&mut self, mem: &Memory) {
+    pub fn BVC(&mut self, mem: &mut Memory) {
         self.branch(mem, StatusFlag::Overflow, false);
     }
 
     /// Branch on oVerflow Set.
-    pub fn BVS(&mut self, mem: &Memory) {
+    pub fn BVS(&mut self, mem: &mut Memory) {
         self.branch(mem, StatusFlag::Overflow, true);
     }
     
     /// Branch on Carry Clear. 
-    pub fn BCC(&mut self, mem: &Memory) {
+    pub fn BCC(&mut self, mem: &mut Memory) {
         self.branch(mem, StatusFlag::Carry, false);
     }
 
     /// Branch on Carry Set. 
-    pub fn BCS(&mut self, mem: &Memory) {
+    pub fn BCS(&mut self, mem: &mut Memory) {
         self.branch(mem, StatusFlag::Carry, true);
     }
 
     /// Branch on Not Equal. 
-    pub fn BNE(&mut self, mem: &Memory) {
+    pub fn BNE(&mut self, mem: &mut Memory) {
         self.branch(mem, StatusFlag::Zero, false);
     }
 
     /// Branch on EQual. 
-    pub fn BEQ(&mut self, mem: &Memory) {
+    pub fn BEQ(&mut self, mem: &mut Memory) {
         self.branch(mem, StatusFlag::Zero, true);
     }
 }

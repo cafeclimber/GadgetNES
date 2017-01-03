@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // Pattern tables
 pub const PAT_TABLE_0_BEG: u16 = 0x0000;
 pub const PAT_TABLE_0_END: u16 = 0x0FFF;

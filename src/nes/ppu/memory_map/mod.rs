@@ -68,7 +68,7 @@ impl MemoryMap {
 }
 
 impl MemMapped for MemoryMap {
-    fn read_byte(&self, addr: u16) -> u8 {
+    fn read_byte(&mut self, addr: u16) -> u8 {
         match addr {
             // Maps both pattern tables to CHR-ROM
             // TODO: Not sure if correct

@@ -4,7 +4,6 @@
 //! Provides an interface to SDL.
 
 use sdl2::Sdl;
-use sdl2::video::Window;
 use sdl2::render::Renderer;
 use sdl2::render::Texture;
 use sdl2::pixels::PixelFormatEnum;

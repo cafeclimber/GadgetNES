@@ -104,12 +104,10 @@ impl Cpu {
     }
 
     pub fn interrupt(&mut self, mem: &mut Memory, interrupt: Interrupt) {
-        let addr_low = (self.pc & 0b1111_1111) as u8;
-        let addr_high = ((self.pc & 0b1111_1111_0000_0000) >> 8) as u8;
-        self.push_stack(mem, addr_high);
-        self.push_stack(mem, addr_low);
         let vector = match interrupt {
             Interrupt::BRK => {
+                // Check if IntDisable flag is set
+                if self.check_flag(StatusFlag::IntDisable, true) { return; }
                 self.set_flag(StatusFlag::Break, true);
                 let flags = self.p;
                 self.push_stack(mem, flags);
@@ -117,6 +115,8 @@ impl Cpu {
                 BRK_IRQ_VECTOR
             },
             Interrupt::IRQ => {
+                // Check if IntDisable flag is set
+                if self.check_flag(StatusFlag::IntDisable, true) { return; }
                 self.set_flag(StatusFlag::Break, false);
                 let flags = self.p;
                 self.push_stack(mem, flags);
@@ -129,10 +129,15 @@ impl Cpu {
                 NMI_VECTOR
             },
         };
-        println!("\n!!!!!!!!!!!!!!!!!!  Asserting {:?} interrupt with vector: {:#04X} !!!!!!!!!!!!!!!!!!!\n",
+        let addr_low = (self.pc & 0b1111_1111) as u8;
+        let addr_high = ((self.pc & 0b1111_1111_0000_0000) >> 8) as u8;
+        self.push_stack(mem, addr_high);
+        self.push_stack(mem, addr_low);
+        #[cfg(feature="debug")]
+        println!("\n!!!!!!!!!!!!!!!!!!!!!  Asserting {:?} interrupt with addr: {:#04X} !!!!!!!!!!!!!!!!!!!!!\n",
                  interrupt,
-                 vector);
-        self.pc = vector;
+                 read_word(mem, vector));
+        self.pc = read_word(mem, vector);
     }
 
     /// This is the primary operation of the CPU. It represents the
@@ -183,14 +188,17 @@ impl Cpu {
 
     /// Returns a byte from mapped memory.
     pub fn fetch_byte(&self,
-                      mem: &Memory,
+                      mem: &mut Memory,
                       addr_mode: AddressingMode)
                       -> u8
     {
         match addr_mode {
             AddressingMode::Accumulator => self.a,
             AddressingMode::Immediate => read_byte(mem, self.pc + 1),
-            _ => read_byte(mem, self.get_addr(mem, addr_mode))
+            _ => {
+                let addr = self.get_addr(mem, addr_mode);
+                read_byte(mem, addr)
+            }
         }
     }
 
@@ -223,7 +231,7 @@ impl Cpu {
     /// those modes where this interaction is handled by the individual function.
     /// These are Implied, Indexed, and Relative modes.
     pub fn get_addr(&self,
-                      mem: &Memory,
+                      mem: &mut Memory,
                       addr_mode: AddressingMode)
                       -> u16
     {
@@ -276,13 +284,14 @@ impl Cpu {
 }
 
 
+// TODO: Fix this so as to not screw with PPU read/write privileges
 #[cfg(feature="debug")]
 // Could probably split up but don't really care, it's just printing for now...
 // Probably a much better way to do this than readdressing memory, but....whateva
 fn debug_print(cpu: &Cpu,
                op_code: u8,
                instr: Instruction,
-               mem: &Memory,
+               mem: &mut Memory,
                addr_mode: AddressingMode)
 {
     print!("{:04X}  {:02X}", cpu.pc, op_code);
@@ -301,7 +310,10 @@ fn debug_print(cpu: &Cpu,
             print!(" {0:02X}     {1:?} ${0:02X} = {2:02X}                   ",
                    read_byte(mem, cpu.pc + 1),
                    instr,
-                   read_byte(mem, read_byte(mem, cpu.pc + 1) as u16));
+                   {
+                       let addr = read_byte(mem, cpu.pc + 1) as u16;
+                       read_byte(mem, addr)
+                   });
         },
         Relative => {
             let offset = read_byte(mem, cpu.pc + 1) as i8;
@@ -322,7 +334,10 @@ fn debug_print(cpu: &Cpu,
                        read_byte(mem, cpu.pc + 1),
                        read_byte(mem, cpu.pc + 2),
                        instr,
-                       read_byte(mem, read_word(mem, cpu.pc + 1)));
+                       {
+                           let addr = read_word(mem, cpu.pc + 1);
+                           read_byte(mem, addr)
+                       });
             }
         },
         Indirect => {
@@ -434,7 +449,7 @@ fn debug_print(cpu: &Cpu,
 
 impl fmt::Debug for Cpu {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:5?}",
+        write!(f, " A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}    CYC:{:5?}",
                self.a,
                self.x,
                self.y,

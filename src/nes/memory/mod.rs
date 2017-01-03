@@ -45,7 +45,7 @@ impl<'a> Memory<'a> {
         }
     }
 
-    pub fn read_ppu_byte(&self, addr: u16) -> u8 {
+    pub fn read_ppu_byte(&mut self, addr: u16) -> u8 {
         self.ppu.read_byte(addr)
     }
     
@@ -53,7 +53,7 @@ impl<'a> Memory<'a> {
         self.ppu.write_byte(addr, val);
     }
 
-    pub fn read_io_byte(&self, addr: u16) -> u8 {
+    pub fn read_io_byte(&mut self, addr: u16) -> u8 {
         self.io.read_byte(addr)
     }
     
@@ -62,7 +62,7 @@ impl<'a> Memory<'a> {
     }
 
     /// Reads a byte from RAM.
-    pub fn read_ram_byte(&self, addr: u16) -> u8 {
+    pub fn read_ram_byte(&mut self, addr: u16) -> u8 {
         self.ram.read_byte(addr)
     }
 
@@ -99,7 +99,7 @@ impl MemMapped for Ram {
     ///
     /// #Panics
     /// Will panic if the address is not in RAM.
-    fn read_byte(&self, addr: u16) -> u8 {
+    fn read_byte(&mut self, addr: u16) -> u8 {
         match addr {
             ZERO_PAGE_BEG...ZERO_PAGE_END => {
                 self.zero_page[addr as usize]

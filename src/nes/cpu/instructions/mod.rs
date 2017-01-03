@@ -248,7 +248,7 @@ pub fn decode(cpu: &mut Cpu, op_code: u8) -> (Instruction, AddressingMode) {
         0xEA => {cpu.cycle+= 2; (NOP, Implied)},
 
         /******** END OF OFFICIAL OPCODES *********/
-        _ => panic!("Unrecognized opcode: ${:02X}", op_code)
+        _ => panic!("Unrecognized opcode: ${:02X} PC:${:04X}", op_code, cpu.pc)
     }
 }
 
