@@ -2,3 +2,4 @@ target
 *.org
 roms/
 Cargo.lock
+tests/
