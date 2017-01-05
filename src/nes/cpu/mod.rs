@@ -294,157 +294,37 @@ fn debug_print(cpu: &Cpu,
                mem: &mut Memory,
                addr_mode: AddressingMode)
 {
-    print!("{:04X}  {:02X}", cpu.pc, op_code);
+    print!("{:04X}  {:02X} {:?}",
+           cpu.pc,
+           op_code,
+           instr);
 
-    use self::instructions::AddressingMode::*;
     match addr_mode {
-        Implied => {
-            print!("        {:?}                            ",
-                   instr);
-        },
-        Accumulator => {
-            print!("        {:?} A                          ",
-                   instr);
-        },
-        ZeroPage => {
-            print!(" {0:02X}     {1:?} ${0:02X} = {2:02X}                   ",
-                   read_byte(mem, cpu.pc + 1),
-                   instr,
-                   {
-                       let addr = read_byte(mem, cpu.pc + 1) as u16;
-                       read_byte(mem, addr)
-                   });
-        },
-        Relative => {
-            let offset = read_byte(mem, cpu.pc + 1) as i8;
-            let branch_target = (((cpu.pc + 2) as i32) + (offset as i32)) as u16;
-            print!(" {0:02X}     {1:?} ${2:04X}                      ",
-                   read_byte(mem, cpu.pc + 1),
-                   instr,
-                   branch_target);
-        },
-        Absolute => {
-            if instr == Instruction::JMP  || instr == Instruction::JSR {
-                print!(" {0:02X} {1:02X}  {2:?} ${1:02X}{0:02X}                      ",
-                    read_byte(mem, cpu.pc + 1),
-                    read_byte(mem, cpu.pc + 2),
-                    instr);
-            } else {
-                print!(" {0:02X} {1:02X}  {2:?} ${1:02X}{0:02X} = {3:02X}                 ",
-                       read_byte(mem, cpu.pc + 1),
-                       read_byte(mem, cpu.pc + 2),
-                       instr,
-                       {
-                           let addr = read_word(mem, cpu.pc + 1);
-                           read_byte(mem, addr)
-                       });
-            }
-        },
-        Indirect => {
-            let addr = read_word(mem, cpu.pc + 1);
-            let val = {
-                if addr & 0xFF == 0xFF {
-                    (read_byte(mem, addr) as u16) |
-                    // keep upper byte and make low byte 0
-                    (read_byte(mem, addr & 0xFF00) as u16) << 8
-                } else {
-                    (read_byte(mem, addr) as u16) |
-                    (read_byte(mem, addr + 1) as u16) << 8
-                }
-            };
-            print!(" {0:02X} {1:02X}  {2:?} (${3:04X}) = {4:04X}             ",
-                   read_byte(mem, cpu.pc + 1),
-                   read_byte(mem, cpu.pc + 2),
-                   instr,
-                   read_word(mem, cpu.pc + 1),
-                   val);
-        },
-        Immediate => {
-            print!(" {0:02X}     {1:?} #${0:02X}                       ",
-                   read_byte(mem, cpu.pc + 1),
-                   instr,
-            );
-        },
-        IndexedIndirect => {
-            let operand = read_byte(mem, cpu.pc + 1);
-            let index = operand.wrapping_add(cpu.x);
-            // Deals with zero-page wrapping
-            let addr = {
-                (read_byte(mem, index as u16) as u16) |
-                (read_byte(mem, index.wrapping_add(1) as u16) as u16) << 8
-            };
-            let val = read_byte(mem, addr);
-            print!(" {0:02X}     {1:?} (${0:02X},X) @ {2:02X} = {3:04X} = {4:02X}   ",
-                   operand,
-                   instr,
-                   index,
-                   addr,
-                   val);
-        },
-        IndirectIndexed => {
-            let operand = read_byte(mem, cpu.pc + 1);
-            // Deals with zero-page wrapping
-            let addr = {
-                (read_byte(mem, operand as u16) as u16) |
-                (read_byte(mem, operand.wrapping_add(1) as u16) as u16) << 8
-            };
-            let indexed_addr = addr.wrapping_add(cpu.y as u16);
-            let val = read_byte(mem, indexed_addr);
-            print!(" {0:02X}     {1:?} (${0:02X}),Y = {2:04X} @ {3:04X} = {4:02X} ",
-                   operand,
-                   instr,
-                   addr,
-                   indexed_addr,
-                   val);
-        },
-        ZeroPageIndexedX => {
-            let addr = read_byte(mem, cpu.pc + 1);
-            let indexed_addr = addr.wrapping_add(cpu.x);
-            let val = read_byte(mem, indexed_addr as u16);
-            print!(" {0:02X}     {1:?} ${2:02X},X @ {3:02X} = {4:02X}            ",
-                   read_byte(mem, cpu.pc + 1),
-                   instr,
-                   addr,
-                   indexed_addr,
-                   val);
-        },
-        ZeroPageIndexedY => {
-            let addr = read_byte(mem, cpu.pc + 1);
-            let indexed_addr = addr.wrapping_add(cpu.y);
-            let val = read_byte(mem, indexed_addr as u16);
-            print!(" {0:02X}     {1:?} ${2:02X},Y @ {3:02X} = {4:02X}            ",
-                   read_byte(mem, cpu.pc + 1),
-                   instr,
-                   addr,
-                   indexed_addr,
-                   val);
-        },
-        AbsoluteIndexedX => {
-            let addr = read_word(mem, cpu.pc + 1) as u16;
-            let indexed_addr = addr.wrapping_add(cpu.x as u16);
-            let val = read_byte(mem, indexed_addr);
-            print!(" {0:02X} {1:02X}  {2:?} ${3:04X},X @ {4:04X} = {5:02X}        ",
-                   read_byte(mem, cpu.pc + 1),
-                   read_byte(mem, cpu.pc + 2),
-                   instr,
-                   addr,
-                   indexed_addr,
-                   val);
-        },
-        AbsoluteIndexedY => {
-            let addr = read_word(mem, cpu.pc + 1) as u16;
-            let indexed_addr = addr.wrapping_add(cpu.y as u16);
-            let val = read_byte(mem, indexed_addr);
-            print!(" {0:02X} {1:02X}  {2:?} ${3:04X},Y @ {4:04X} = {5:02X}        ",
-                   read_byte(mem, cpu.pc + 1),
-                   read_byte(mem, cpu.pc + 2),
-                   instr,
-                   addr,
-                   indexed_addr,
-                   val);
-        },
+        AddressingMode::Implied => print!("                                   "),
+        AddressingMode::Accumulator => print!(" A                                 "),
+        AddressingMode::Relative => print!(" BRANCH                            "),
+        AddressingMode::Absolute => print!(" ${:04X}                             ",
+                                           cpu.get_addr(mem, addr_mode)),
+        AddressingMode::AbsoluteIndexedX => print!(" ${:04X},X                     ",
+                                                   cpu.get_addr(mem, addr_mode)),
+        AddressingMode::AbsoluteIndexedY => print!(" ${:04X},Y                      ",
+                                                   cpu.get_addr(mem, addr_mode)),
+        AddressingMode::Immediate => print!(" #{:02X}                               ",
+                                            cpu.fetch_byte(mem, addr_mode)),
+        AddressingMode::Indirect => print!(" ($ADDR)"),
+        AddressingMode::IndexedIndirect => print!(" (${:04X},X)                 ",
+                                                  cpu.get_addr(mem, addr_mode)),
+        AddressingMode::IndirectIndexed => print!(" (${:04X}),Y                         ",
+                                                  cpu.get_addr(mem, addr_mode)),
+        AddressingMode::ZeroPage => print!(" ${:02X}                               ",
+                                           cpu.get_addr(mem, addr_mode)),
+        AddressingMode::ZeroPageIndexedX => print!(" ${:02X},X                      ",
+                                                   cpu.get_addr(mem, addr_mode)),
+        AddressingMode::ZeroPageIndexedY => print!(" ${:02X},Y                        ",
+                                                   cpu.get_addr(mem, addr_mode)),
     }
-    print!("{:?}\n", cpu);
+
+    println!("{:?}", cpu);
 }
 
 impl fmt::Debug for Cpu {

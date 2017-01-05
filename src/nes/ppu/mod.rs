@@ -16,7 +16,7 @@ use self::memory_map::MemoryMap;
 const CPU_CYCLES_PER_SCANLINE: u32 = 114;
 const LAST_VISIBLE_SCANLINE: u8 = 239;
 const BYTES_PER_SCANLINE: usize = 32; // Number of rendered bytes per scanline
-const VBLANK_LINES: u32 = 20;
+const LAST_VBLANK_LINE: u8 = 19; // For timing.
 
 // From thealmightyguru.com
 // TODO: Is an array of tuples usable
@@ -171,7 +171,20 @@ enum Scanline {
     PreRender,
     Visible(u8),
     PostRender,
-    VBlank,
+    VBlank(u8),
+}
+
+impl Scanline {
+    fn next(&self) -> Scanline {
+        match *self {
+            Scanline::PreRender => Scanline::Visible(0),
+            Scanline::Visible(LAST_VISIBLE_SCANLINE) => Scanline::PostRender,
+            Scanline::Visible(line) => Scanline::Visible(line + 1),
+            Scanline::PostRender => Scanline::VBlank(0),
+            Scanline::VBlank(LAST_VBLANK_LINE) => Scanline::PreRender,
+            Scanline::VBlank(line) => Scanline::VBlank(line + 1),
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -199,12 +212,18 @@ struct BgPixelBuffer {
 
 impl BgPixelBuffer {
     // From NES Dev wiki
-    pub fn refresh_buffer(&mut self, addr: u16) {
+    pub fn refresh_buffer(&mut self,
+                          mem_map: &mut MemoryMap,
+                          addr: u16,
+                          patt_base: u16)
+    {
         let tile_addr = 0x2000 | (addr & 0x0FFF);
         let patt_addr = 0x23C0 |
                         (addr & 0x0C00) |
                         ((addr >> 4) & 0x38) |
                         ((addr >> 2) & 0x07);
+        let tile_no = mem_map.read_byte(tile_addr);
+        println!("tile_num: {:02X}", tile_no);
     }
 }
 
@@ -258,8 +277,10 @@ impl<'a> Ppu<'a> {
                 PreRender => { self.prerender(); },
                 Visible(line) => { self.scanline(line); },
                 PostRender => { self.postrender(); },
-                VBlank => { self.vblank(); nmi = true },
+                VBlank(0) => { nmi = self.vblank(); },
+                VBlank(_) => { self.cycle += CPU_CYCLES_PER_SCANLINE; },
             };
+            self.scanline = self.scanline.next();
         }
         if nmi { self.cycle = 0; }
         nmi
@@ -274,25 +295,30 @@ impl<'a> Ppu<'a> {
     fn scanline(&mut self, line: u8) {
         self.cycle += CPU_CYCLES_PER_SCANLINE;
 
+        let patt_base = self.bg_pattern_table_base();
         for byte in 0..BYTES_PER_SCANLINE {
             let offset = (line as usize) * (SCREEN_WIDTH * 3 as usize) + (byte * 24);
             for bit in 0..8 {
-                self.frame[offset + (3 * bit)] = self.bg_buffer_2.pixels[bit].red;
-                self.frame[offset + (3 * bit) + 1] = self.bg_buffer_2.pixels[bit].green;
-                self.frame[offset + (3 * bit) + 2] = self.bg_buffer_2.pixels[bit].blue;
+                self.frame[offset + (3 * bit)] =
+                    self.bg_buffer_2.pixels[bit].red;
+                self.frame[offset + (3 * bit) + 1] =
+                    self.bg_buffer_2.pixels[bit].green;
+                self.frame[offset + (3 * bit) + 2] =
+                    self.bg_buffer_2.pixels[bit].blue;
             }
             self.coarse_x_increment();
             self.bg_buffer_2 = self.bg_buffer_1;
             let addr = self.current_v_addr;
-            self.bg_buffer_1.refresh_buffer(addr);
+            self.bg_buffer_1.refresh_buffer(&mut self.memory_map,
+                                            addr,
+                                            patt_base);
         }
         self.coarse_y_increment();
         self.bg_buffer_2 = self.bg_buffer_1;
         let addr = self.current_v_addr;
-        self.bg_buffer_1.refresh_buffer(addr);
-        
-        if line == LAST_VISIBLE_SCANLINE { self.scanline = Scanline::PostRender }
-        else { self.scanline = Scanline::Visible(line + 1); }
+        self.bg_buffer_1.refresh_buffer(&mut self.memory_map,
+                                        addr,
+                                        patt_base);
     }
 
     // Directly from dev wiki
@@ -326,18 +352,18 @@ impl<'a> Ppu<'a> {
 
     fn postrender(&mut self) {
         self.cycle += CPU_CYCLES_PER_SCANLINE;
-        self.scanline = Scanline::VBlank;
     }
 
-    fn vblank(&mut self) {
-        self.cycle += VBLANK_LINES * CPU_CYCLES_PER_SCANLINE;
+    fn vblank(&mut self) -> bool {
         self.set_vblank(true);
-        self.scanline = Scanline::PreRender;
-        self.graphics.display_frame(&mut self.frame);
         self.current_v_addr = self.temp_v_addr;
+        self.graphics.display_frame(&mut self.frame);
+        self.cycle += CPU_CYCLES_PER_SCANLINE;
+        if self.generate_nmi() { true } else { false }
     }
 
     fn set_vblank(&mut self, set: bool) {
+        println!("Set vblank: {:?}", set);
         match set {
             true => self.ppu_status |= 1 << 7,
             false => self.ppu_status &= !(1 << 7),
@@ -372,8 +398,8 @@ impl<'a> Ppu<'a> {
         (((self.ppu_ctrl & (1 << 3)) >> 3) as u16 * 0x1000) as usize
     }
     /// Returns the base address of the current background pattern table.
-    fn bg_pattern_table_base(&self) -> usize {
-        (((self.ppu_ctrl & (1 << 4)) >> 4) as u16 * 0x1000) as usize
+    fn bg_pattern_table_base(&self) -> u16 {
+        (((self.ppu_ctrl & (1 << 4)) >> 4) as u16 * 0x1000)
     }
     /// Returns whether an NMI should be generated at the start of the next
     /// VBLANK interval.

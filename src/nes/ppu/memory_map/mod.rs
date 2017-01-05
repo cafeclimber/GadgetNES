@@ -41,29 +41,30 @@ impl MemoryMap {
 
     /// Deals with mirrorring
     fn vram_addr(&self, addr: u16) -> u16 {
-        match self.mirroring {
+        let v_addr = match self.mirroring {
             /// 0x2000 = 0x2800 and 0x2400 = 0x2C00
             Mirroring::Horizontal => {
                 match addr {
-                    0x2000...0x27FF => addr,
-                    0x2800...0x2FFF => addr - 0x0800,
-                    _ => panic!("Should be unreachable")
+                    0x2000...0x27FF => addr - 0x2000,
+                    0x2800...0x2FFF => addr - 0x2000 - 0x0800,
+                    _ => panic!("Should be unreachable: {:04X}", addr)
                 }
             },
             /// 0x2000 = 0x2400 and 0x2800 = 0x2C00
             Mirroring::Vertical => {
                 match addr {
-                    0x2000...0x23FF => addr,
-                    0x2400...0x27FF => addr - 0x400,
-                    0x2800...0x2BFF => addr - 0x400,
-                    0x2C00...0x2FFF => addr - 0x800,
-                    _ => panic!("Should be unreachable")
+                    0x2000...0x23FF => addr - 0x2000,
+                    0x2400...0x27FF => addr - 0x2000 - 0x400,
+                    0x2800...0x2BFF => addr - 0x2000 - 0x400,
+                    0x2C00...0x2FFF => addr - 0x2000 - 0x800,
+                    _ => panic!("Should be unreachable: {:04X}", addr)
                 }
             },
             Mirroring::FourWay => {
                 panic!("Four Way mirroring not implemented")
-            },
-        }
+            }
+        };
+        v_addr
     }
 }
 
