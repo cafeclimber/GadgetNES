@@ -133,11 +133,11 @@ impl Cpu {
         let addr_high = ((self.pc & 0b1111_1111_0000_0000) >> 8) as u8;
         self.push_stack(mem, addr_high);
         self.push_stack(mem, addr_low);
+        self.pc = read_word(mem, vector);
         #[cfg(feature="debug")]
         println!("\n!!!!!!!!!!!!!!!!!!!!!  Asserting {:?} interrupt with addr: {:#04X} !!!!!!!!!!!!!!!!!!!!!\n",
                  interrupt,
-                 read_word(mem, vector));
-        self.pc = read_word(mem, vector);
+                 self.pc);
     }
 
     /// This is the primary operation of the CPU. It represents the
@@ -300,28 +300,54 @@ fn debug_print(cpu: &Cpu,
            instr);
 
     match addr_mode {
-        AddressingMode::Implied => print!("                                   "),
-        AddressingMode::Accumulator => print!(" A                                 "),
-        AddressingMode::Relative => print!(" BRANCH                            "),
-        AddressingMode::Absolute => print!(" ${:04X}                             ",
-                                           cpu.get_addr(mem, addr_mode)),
-        AddressingMode::AbsoluteIndexedX => print!(" ${:04X},X                     ",
-                                                   cpu.get_addr(mem, addr_mode)),
-        AddressingMode::AbsoluteIndexedY => print!(" ${:04X},Y                      ",
-                                                   cpu.get_addr(mem, addr_mode)),
-        AddressingMode::Immediate => print!(" #{:02X}                               ",
-                                            cpu.fetch_byte(mem, addr_mode)),
-        AddressingMode::Indirect => print!(" ($ADDR)"),
-        AddressingMode::IndexedIndirect => print!(" (${:04X},X)                 ",
-                                                  cpu.get_addr(mem, addr_mode)),
-        AddressingMode::IndirectIndexed => print!(" (${:04X}),Y                         ",
-                                                  cpu.get_addr(mem, addr_mode)),
-        AddressingMode::ZeroPage => print!(" ${:02X}                               ",
-                                           cpu.get_addr(mem, addr_mode)),
-        AddressingMode::ZeroPageIndexedX => print!(" ${:02X},X                      ",
-                                                   cpu.get_addr(mem, addr_mode)),
-        AddressingMode::ZeroPageIndexedY => print!(" ${:02X},Y                        ",
-                                                   cpu.get_addr(mem, addr_mode)),
+        AddressingMode::Implied => {
+            print!("                                   ")
+        },
+        AddressingMode::Accumulator => {
+            print!(" A                                 ")
+        },
+        AddressingMode::Relative => {
+            print!(" BRANCH                            ")
+        },
+        AddressingMode::Absolute => {
+            print!(" ${:04X}                             ",
+                   cpu.get_addr(mem, addr_mode))
+        },
+        AddressingMode::AbsoluteIndexedX => {
+            print!(" ${:04X},X                     ",
+                   cpu.get_addr(mem, addr_mode))
+        },
+        AddressingMode::AbsoluteIndexedY => {
+            print!(" ${:04X},Y                      ",
+                   cpu.get_addr(mem, addr_mode))
+        },
+        AddressingMode::Immediate => {
+            print!(" #{:02X}                               ",
+                   cpu.fetch_byte(mem, addr_mode))
+        },
+        AddressingMode::Indirect => {
+            print!(" ($ADDR)                            ")
+        },
+        AddressingMode::IndexedIndirect => {
+            print!(" (${:04X},X)                 ",
+                   cpu.get_addr(mem, addr_mode))
+        },
+        AddressingMode::IndirectIndexed => {
+            print!(" (${:04X}),Y                         ",
+                   cpu.get_addr(mem, addr_mode))
+        },
+        AddressingMode::ZeroPage => {
+            print!(" ${:02X}                               ",
+                   cpu.get_addr(mem, addr_mode))
+        },
+        AddressingMode::ZeroPageIndexedX => {
+            print!(" ${:02X},X                      ",
+                   cpu.get_addr(mem, addr_mode))
+        },
+        AddressingMode::ZeroPageIndexedY => {
+            print!(" ${:02X},Y                        ",
+                   cpu.get_addr(mem, addr_mode))
+        },
     }
 
     println!("{:?}", cpu);

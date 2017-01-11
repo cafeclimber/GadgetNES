@@ -15,6 +15,10 @@ use self::cpu::Interrupt::NMI;
 use self::memory::Memory;
 use ines::InesRom;
 
+use std::time;
+use std::thread::sleep;
+
+const NS_PER_FRAME: u32 = 16_670_000;
 
 /// Contains the CPU, PPU, and Memory.
 pub struct Nes<'a> {
@@ -29,7 +33,6 @@ trait MemMapped {
     fn read_byte(&mut self, addr: u16) -> u8;
     fn write_byte(&mut self, addr: u16, val: u8);
 }
-
 
 #[derive(PartialEq)]
 enum NesState {
@@ -53,6 +56,7 @@ impl<'a> Nes<'a> {
         self.mem.ppu.power_up();
         while self.state == NesState::Running {
             self.cpu.step(&mut self.mem);
+            let frame_start = time::Instant::now();
             let nmi = self.mem.ppu.step(self.cpu.cycle);
             if nmi {
                 #[cfg(feature="debug")]
@@ -60,6 +64,15 @@ impl<'a> Nes<'a> {
                           LANK ########################################");
                 self.cpu.interrupt(&mut self.mem, NMI);
                 self.cpu.cycle = 0;
+
+                let frame_duration = frame_start.elapsed();
+                let target_frame_duration = time::Duration::new(0,NS_PER_FRAME);
+                if frame_duration < target_frame_duration {
+                    let sleep_time = target_frame_duration - frame_duration;
+                    #[cfg(feature="debug")]
+                    println!("sleep_time: {:?}", sleep_time);
+                    sleep(sleep_time);
+                }
             } else {
                 #[cfg(feature="debug")]
                 println!("###########################################\
@@ -75,7 +88,6 @@ impl<'a> Nes<'a> {
                     _ => {}
                 }
             }
-
         }
     }
 }

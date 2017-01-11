@@ -42,12 +42,10 @@ impl Mapper for Mapper0 {
     /// Mapper 0 can be used with either 16KiB or 32KiB ROMs. Offsets are
     /// dealt with accordingly.
     fn read_rom_byte(&self, addr: u16) -> u8 {
-        if self.prg_rom.len() > 0x8000 {
-            self.prg_rom[(addr - 0x8000) as usize]
-        } else if addr >= 0xC000 {
-            self.prg_rom[(addr - 0xC000) as usize]
+        if self.prg_rom.len() == 0x8000 {
+            self.prg_rom[addr as usize - 0x8000]
         } else {
-            self.prg_rom[(addr - 0x8000) as usize]
+            self.prg_rom[addr as usize - 0xC000]
         }
     }
 

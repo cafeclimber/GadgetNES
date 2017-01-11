@@ -8,7 +8,7 @@ use sdl2::Sdl;
 use nes::MemMapped;
 use nes::memory::mapper::Mapper;
 use graphics::Graphics;
-use graphics::{SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_SIZE};
+use graphics::{SCREEN_WIDTH, SCREEN_SIZE};
 
 mod memory_map;
 use self::memory_map::MemoryMap;
@@ -217,13 +217,16 @@ impl BgPixelBuffer {
                           addr: u16,
                           patt_base: u16)
     {
-        let tile_addr = 0x2000 | (addr & 0x0FFF);
+        let mut tile_addr = 0x2000 | (addr & 0x0FFF);
+        let tile_no = mem_map.read_byte(tile_addr) as u16;
+        tile_addr = tile_no * 8; // tiles are 8 bits wide
+        let tile_byte = mem_map.read_byte(tile_addr);
+
         let patt_addr = 0x23C0 |
                         (addr & 0x0C00) |
                         ((addr >> 4) & 0x38) |
                         ((addr >> 2) & 0x07);
-        let tile_no = mem_map.read_byte(tile_addr);
-        println!("tile_num: {:02X}", tile_no);
+
     }
 }
 
@@ -289,6 +292,10 @@ impl<'a> Ppu<'a> {
     fn prerender(&mut self) {
         self.cycle += CPU_CYCLES_PER_SCANLINE;
         self.set_vblank(false);
+        self.current_v_addr = self.temp_v_addr;
+        let patt_base = self.bg_pattern_table_base();
+        let addr = self.current_v_addr;
+        self.bg_buffer_1.refresh_buffer(&mut self.memory_map, addr, patt_base);
         self.scanline = Scanline::Visible(0);
     }
 
@@ -306,19 +313,41 @@ impl<'a> Ppu<'a> {
                 self.frame[offset + (3 * bit) + 2] =
                     self.bg_buffer_2.pixels[bit].blue;
             }
-            self.coarse_x_increment();
+            if self.show_bg() {
+                self.coarse_x_increment();
+            }
             self.bg_buffer_2 = self.bg_buffer_1;
             let addr = self.current_v_addr;
             self.bg_buffer_1.refresh_buffer(&mut self.memory_map,
                                             addr,
                                             patt_base);
         }
-        self.coarse_y_increment();
+        if self.show_bg() {
+            self.y_increment();
+        }
         self.bg_buffer_2 = self.bg_buffer_1;
         let addr = self.current_v_addr;
         self.bg_buffer_1.refresh_buffer(&mut self.memory_map,
                                         addr,
                                         patt_base);
+    }
+
+    fn postrender(&mut self) {
+        self.cycle += CPU_CYCLES_PER_SCANLINE;
+    }
+
+    fn vblank(&mut self) -> bool {
+        self.set_vblank(true);
+        self.graphics.display_frame(&mut self.frame);
+        self.cycle += CPU_CYCLES_PER_SCANLINE;
+        if self.generate_nmi() { true } else { false }
+    }
+
+    fn set_vblank(&mut self, set: bool) {
+        match set {
+            true => self.ppu_status |= 1 << 7,
+            false => self.ppu_status &= !(1 << 7),
+        }
     }
 
     // Directly from dev wiki
@@ -333,7 +362,7 @@ impl<'a> Ppu<'a> {
     }
 
     // Directly from NES dev wiki
-    fn coarse_y_increment(&mut self) {
+    fn y_increment(&mut self) {
         if (self.current_v_addr & 0x7000) != 0x7000 {
             self.current_v_addr += 0x1000;
         }
@@ -350,25 +379,6 @@ impl<'a> Ppu<'a> {
         }
     }
 
-    fn postrender(&mut self) {
-        self.cycle += CPU_CYCLES_PER_SCANLINE;
-    }
-
-    fn vblank(&mut self) -> bool {
-        self.set_vblank(true);
-        self.current_v_addr = self.temp_v_addr;
-        self.graphics.display_frame(&mut self.frame);
-        self.cycle += CPU_CYCLES_PER_SCANLINE;
-        if self.generate_nmi() { true } else { false }
-    }
-
-    fn set_vblank(&mut self, set: bool) {
-        println!("Set vblank: {:?}", set);
-        match set {
-            true => self.ppu_status |= 1 << 7,
-            false => self.ppu_status &= !(1 << 7),
-        }
-    }
 
     /// Sets the vblank and sprite overflow bits of PPUSTATUS as this
     /// was commonly the state of the PPU after power on and warm up.
@@ -379,19 +389,19 @@ impl<'a> Ppu<'a> {
 
     /* ######################### PPUCTRL helpers ######################### */
     /// Returns which nametable is indicated by PPUCTRL
-    fn nametable_base_addr(&self) -> usize {
+    fn nametable_base_addr(&self) -> u16 {
         match self.ppu_ctrl & 0b11 {
-            0b00 => 0x2000 as usize,
-            0b01 => 0x2400 as usize,
-            0b10 => 0x2800 as usize,
-            0b11 => 0x2C00 as usize,
+            0b00 => 0x2000 as u16,
+            0b01 => 0x2400 as u16,
+            0b10 => 0x2800 as u16,
+            0b11 => 0x2C00 as u16,
             _ => unreachable!()
         }
     }
     /// Bit 0 of PPUCTRL determines the increment of VRAM address to
     /// be either 1 or 32
-    fn vram_increment(&self) -> usize {
-        (((self.ppu_ctrl & (1 << 2)) >> 2) * 32) as usize
+    fn vram_increment(&self) -> u16 {
+        (((self.ppu_ctrl & (1 << 2)) >> 2) * 32) as u16
     }
     /// Returns the base address of the current nametable.
     fn sprite_pattern_table_base(&self) -> usize {
@@ -406,19 +416,19 @@ impl<'a> Ppu<'a> {
     fn generate_nmi(&self) -> bool { self.ppu_ctrl & (1 << 7) != 0 }
 
     /* ######################### PPUMASK helpers ########################## */
-    /* fn greyscale(&self) -> bool { self.ppu_mask & (1 << 0) != 0 }
-    fn show_bg_left(&self) -> bool { self.ppu_mask & (1 << 1) != 0 }
-    fn show_sprites_left(&self) -> bool { self.ppu_mask & (1 << 2) != 0 }
+    // fn greyscale(&self) -> bool { self.ppu_mask & (1 << 0) != 0 }
+    // fn show_bg_left(&self) -> bool { self.ppu_mask & (1 << 1) != 0 }
+    // fn show_sprites_left(&self) -> bool { self.ppu_mask & (1 << 2) != 0 }
     fn show_bg(&self) -> bool { self.ppu_mask & (1 << 3) != 0 }
-    fn show_sprites(&self) -> bool { self.ppu_mask & (1 << 4) != 0 }
-    fn emph_red(&self) -> bool { self.ppu_mask & (1 << 5) != 0 }
-    fn emph_gre(&self) -> bool { self.ppu_mask & (1 << 6) != 0 }
-    fn emph_blu(&self) -> bool { self.ppu_mask & (1 << 7) != 0 }
+    // fn show_sprites(&self) -> bool { self.ppu_mask & (1 << 4) != 0 }
+    // fn emph_red(&self) -> bool { self.ppu_mask & (1 << 5) != 0 }
+    // fn emph_gre(&self) -> bool { self.ppu_mask & (1 << 6) != 0 }
+    // fn emph_blu(&self) -> bool { self.ppu_mask & (1 << 7) != 0 }
 
     /* ######################### PPUSTATUS helpers ######################## */
-    pub fn sprite_overflow(&self) -> bool { self.ppu_mask & (1 << 5) != 0 }
-    pub fn sprite_0_hit(&self) -> bool { self.ppu_mask & (1 << 6) != 0 }
-    pub fn gen_vblank(&self) -> bool { self.ppu_mask & (1 << 6) != 0 } */
+    // pub fn sprite_overflow(&self) -> bool { self.ppu_mask & (1 << 5) != 0 }
+    // pub fn sprite_0_hit(&self) -> bool { self.ppu_mask & (1 << 6) != 0 }
+    // pub fn gen_vblank(&self) -> bool { self.ppu_mask & (1 << 6) != 0 }
 }
 
 // TODO: Correctly implement these
@@ -438,7 +448,12 @@ impl<'a> MemMapped for Ppu<'a> {
             0x2004 => self.oam_data,
             0x2005 => self.ppu_scroll,
             0x2006 => self.ppu_addr,
-            0x2007 => self.ppu_data,
+            0x2007 => {
+                let current_v_addr = self.nametable_base_addr() |
+                                     (self.current_v_addr & 0x0FFF);
+                self.current_v_addr += self.vram_increment();
+                self.memory_map.read_byte(current_v_addr)
+            }
             0x4014 => self.oam_dma,
             _ => panic!("Unrecognized PPU location: {:#04X}", addr)
         }
@@ -467,15 +482,10 @@ impl<'a> MemMapped for Ppu<'a> {
                         self.write = Write::Two;
                     },
                     Write::Two => {
-                        // Turn off bits 4-8 and OR upper 5 of val
                         self.temp_v_addr =
-                            (self.temp_v_addr & 0x0C1F) | ((val as u16) << 2);
-
-                        // Do the same with bits 13-15 of t and lower 3 of val
-                        self.temp_v_addr =
-                            (self.temp_v_addr & 0x1FFF) | ((val as u16) << 12);
-
-                        self.x_scroll_fine = val & 0b111; // Keep lower 3 bits
+                            (self.temp_v_addr & 0x0C1F) |
+                            ((val as u16 & 0xF8) << 2) |
+                            ((val as u16 & 0b111) << 12);
                         self.write = Write::One;
                     },
                 }
@@ -498,7 +508,12 @@ impl<'a> MemMapped for Ppu<'a> {
                     },
                 }
             }
-            0x2007 => self.ppu_data = val,
+            0x2007 => {
+                let current_v_addr = self.nametable_base_addr() |
+                                     (self.current_v_addr & 0x0FFF);
+                self.memory_map.write_byte(current_v_addr, val);
+                self.current_v_addr += self.vram_increment();
+            },
             0x4014 => self.oam_addr = val,
             _ => panic!("Unrecognized PPU location: {:#04X}", addr)
         }

@@ -29,7 +29,7 @@ impl MemoryMap {
                -> MemoryMap
     {
         MemoryMap {
-            vram: [0; 0x800],
+            vram: [0xFF; 0x800],
             palette: [0; 0x20],
             oam: [0; 0x100],
             chr: mapper,
@@ -105,6 +105,7 @@ impl MemMapped for MemoryMap {
                 self.vram[addr] = val;
             },
             PALETTE_RAM_BEG...PALETTE_RAM_END => {
+                panic!("Wrote to palette ram! {:04X} = {:02X}", addr, val);
                 self.palette[(addr - PALETTE_RAM_BEG) as usize] = val;
             },
             PALETTE_MIRRORS_BEG...PALETTE_MIRRORS_END => {},

@@ -12,11 +12,13 @@ use self::ines::InesRom;
 
 fn main() {
     let rom_name = env::args().nth(1).unwrap();
+    println!("Loading: {:?}", rom_name);
     let rom = InesRom::new(rom_name);
+    println!("{:?}", rom);
 
     assert_eq!(rom.header.magic_no,
                *b"NES\x1a",
-               "ERROR: File is not of iNES format");
+               "ERROR: File is not a vaild iNES ROM");
 
     let sdl_context = sdl2::init().unwrap();
     
