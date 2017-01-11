@@ -41,4 +41,4 @@ These are other materials I found helpful while writing this emulator:
 
 License
 -------
-Licensed under GPLv3 (http://www.gnu.org/licenses/gpl-3.0.html)
+MIT License
