@@ -89,6 +89,13 @@ impl Cpu {
         }
     }
 
+    /// Checks the given value to see if the Zero and Negative flags should be set.
+    /// Other flags are more instruction specific and are dealt with per instruction.
+    fn set_zn_flags(&mut self, val: u8) {
+        self.set_flag(StatusFlag::Zero, val == 0);
+        self.set_flag(StatusFlag::Negative, val & (1 << 7) != 0);
+    }
+
     /// Checks if `flag` matches `is_set`
     ///
     /// #Examples
@@ -328,7 +335,7 @@ fn debug_print(cpu: &Cpu,
         },
         AddressingMode::IndexedIndirect => {
             print!(" (${:02X},X)                           ",
-                   cpu.get_addr(mem, addr_mode))
+                   cpu.fetch_byte(mem, AddressingMode::Immediate))
         },
         AddressingMode::IndirectIndexed => {
             print!(" (${:02X}),Y                         ",

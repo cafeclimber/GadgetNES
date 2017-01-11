@@ -28,17 +28,9 @@ impl Cpu {
     pub fn PLA(&mut self, mem: &mut Memory) {
         self.a = self.pop_stack(mem);
 
-        if self.a == 0 {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
-
-        if self.a & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
+        let a = self.a;
+        self.set_flag(StatusFlag::Zero, a == 0);
+        self.set_flag(StatusFlag::Negative, a & (1 << 7) != 0);
     }
 
     /// Transfer X register to Stack pointer.
@@ -50,16 +42,8 @@ impl Cpu {
     pub fn TSX(&mut self) {
         self.x = self.sp;
 
-        if self.x == 0 {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
-
-        if self.x & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
+        let x = self.x;
+        self.set_flag(StatusFlag::Zero, x == 0);
+        self.set_flag(StatusFlag::Negative, x & (1 << 7) != 0);
     }
 }

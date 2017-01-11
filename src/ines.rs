@@ -97,6 +97,7 @@ impl InesRom {
     }
 }
 
+#[cfg(not(feature="debug_cpu"))]
 impl fmt::Debug for InesRom {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Mapper: {:?} PRG size: {:?} CHR size: {:?}",

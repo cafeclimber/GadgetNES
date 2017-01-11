@@ -12,8 +12,10 @@ use self::ines::InesRom;
 
 fn main() {
     let rom_name = env::args().nth(1).unwrap();
+    #[cfg(not(feature="debug_cpu"))]
     println!("Loading: {:?}", rom_name);
     let rom = InesRom::new(rom_name);
+    #[cfg(not(feature="debug_cpu"))]
     println!("{:?}", rom);
 
     assert_eq!(rom.header.magic_no,

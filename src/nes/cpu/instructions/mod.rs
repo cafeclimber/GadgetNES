@@ -12,6 +12,7 @@ mod loads_stores;
 mod nop;
 mod registers;
 mod stack;
+mod unofficial;
 
 /// All addressing modes used by the 6502 processor
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -42,6 +43,10 @@ pub enum Instruction {
     LDA, LDX, LDY, STA, STX, STY, JSR, JMP,
     RTI, RTS, BIT, ORA, AND, EOR, ADC, CMP,
     SBC, ASL, LSR, ROL, ROR, DEC, INC, NOP,
+
+    // Below are unofficial opcodes denoted by an appended _u
+    NOP_u, LAX_u, SAX_u, SBC_u, DCP_u, ISC_u,
+    SLO_u, RLA_u, SRE_u, RRA_u,
 }
 
 /// Takes an op_code fetched by the cpu and returns the
@@ -248,6 +253,101 @@ pub fn decode(cpu: &mut Cpu, op_code: u8) -> (Instruction, AddressingMode) {
         0xEA => {cpu.cycle+= 2; (NOP, Implied)},
 
         /******** END OF OFFICIAL OPCODES *********/
+        /*********** UNOFFICIAL OPCODES ***********/
+        0x04 => {cpu.cycle += 3; (NOP_u, ZeroPage)},
+        0x44 => {cpu.cycle += 3; (NOP_u, ZeroPage)},
+        0x64 => {cpu.cycle += 3; (NOP_u, ZeroPage)},
+
+        0x0C => {cpu.cycle += 4; (NOP_u, Absolute)},
+
+        0x14 => {cpu.cycle += 4; (NOP_u, ZeroPageIndexedX)},
+        0x34 => {cpu.cycle += 4; (NOP_u, ZeroPageIndexedX)},
+        0x54 => {cpu.cycle += 4; (NOP_u, ZeroPageIndexedX)},
+        0x74 => {cpu.cycle += 4; (NOP_u, ZeroPageIndexedX)},
+        0xD4 => {cpu.cycle += 4; (NOP_u, ZeroPageIndexedX)},
+        0xF4 => {cpu.cycle += 4; (NOP_u, ZeroPageIndexedX)},
+
+        0x1A => {cpu.cycle += 2; (NOP_u, Implied)},
+        0x3A => {cpu.cycle += 2; (NOP_u, Implied)},
+        0x5A => {cpu.cycle += 2; (NOP_u, Implied)},
+        0x7A => {cpu.cycle += 2; (NOP_u, Implied)},
+        0xDA => {cpu.cycle += 2; (NOP_u, Implied)},
+        0xFA => {cpu.cycle += 2; (NOP_u, Implied)},
+
+        0x80 => {cpu.cycle += 2; (NOP_u, Immediate)},
+        0x82 => {cpu.cycle += 2; (NOP_u, Immediate)},
+        0x89 => {cpu.cycle += 2; (NOP_u, Immediate)},
+        0xC2 => {cpu.cycle += 2; (NOP_u, Immediate)},
+
+        0x1C => {cpu.cycle += 4; (NOP_u, AbsoluteIndexedX)},
+        0x3C => {cpu.cycle += 4; (NOP_u, AbsoluteIndexedX)},
+        0x5C => {cpu.cycle += 4; (NOP_u, AbsoluteIndexedX)},
+        0x7C => {cpu.cycle += 4; (NOP_u, AbsoluteIndexedX)},
+        0xDC => {cpu.cycle += 4; (NOP_u, AbsoluteIndexedX)},
+        0xFC => {cpu.cycle += 4; (NOP_u, AbsoluteIndexedX)},
+
+        0xA7 => {cpu.cycle += 3; (LAX_u, ZeroPage)},
+        0xB7 => {cpu.cycle += 4; (LAX_u, ZeroPageIndexedY)},
+        0xAF => {cpu.cycle += 4; (LAX_u, Absolute)},
+        0xBF => {cpu.cycle += 4; (LAX_u, AbsoluteIndexedY)},
+        0xA3 => {cpu.cycle += 6; (LAX_u, IndexedIndirect)},
+        0xB3 => {cpu.cycle += 5; (LAX_u, IndirectIndexed)},
+
+        0x87 => {cpu.cycle += 3; (SAX_u, ZeroPage)},
+        0x97 => {cpu.cycle += 4; (SAX_u, ZeroPageIndexedY)},
+        0x83 => {cpu.cycle += 6; (SAX_u, IndexedIndirect)},
+        0x8F => {cpu.cycle += 4; (SAX_u, Absolute)},
+
+        0xEB => {cpu.cycle += 2; (SBC_u, Immediate)},
+
+        0xC3 => {cpu.cycle += 8; (DCP_u, IndexedIndirect)},
+        0xC7 => {cpu.cycle += 5; (DCP_u, ZeroPage)},
+        0xCF => {cpu.cycle += 6; (DCP_u, Absolute)},
+        0xD3 => {cpu.cycle += 8; (DCP_u, IndirectIndexed)},
+        0xD7 => {cpu.cycle += 6; (DCP_u, ZeroPageIndexedX)},
+        0xDB => {cpu.cycle += 7; (DCP_u, AbsoluteIndexedY)},
+        0xDF => {cpu.cycle += 7; (DCP_u, AbsoluteIndexedX)},
+
+        0xE3 => {cpu.cycle += 8; (ISC_u, IndexedIndirect)},
+        0xE7 => {cpu.cycle += 5; (ISC_u, ZeroPage)},
+        0xEF => {cpu.cycle += 6; (ISC_u, Absolute)},
+        0xF3 => {cpu.cycle += 8; (ISC_u, IndirectIndexed)},
+        0xF7 => {cpu.cycle += 6; (ISC_u, ZeroPageIndexedX)},
+        0xFB => {cpu.cycle += 7; (ISC_u, AbsoluteIndexedY)},
+        0xFF => {cpu.cycle += 7; (ISC_u, AbsoluteIndexedX)},
+
+        0x03 => {cpu.cycle += 8; (SLO_u, IndexedIndirect)},
+        0x07 => {cpu.cycle += 5; (SLO_u, ZeroPage)},
+        0x0F => {cpu.cycle += 6; (SLO_u, Absolute)},
+        0x13 => {cpu.cycle += 8; (SLO_u, IndirectIndexed)},
+        0x17 => {cpu.cycle += 6; (SLO_u, ZeroPageIndexedX)},
+        0x1B => {cpu.cycle += 7; (SLO_u, AbsoluteIndexedY)},
+        0x1F => {cpu.cycle += 7; (SLO_u, AbsoluteIndexedX)},
+
+        0x23 => {cpu.cycle += 8; (RLA_u, IndexedIndirect)},
+        0x27 => {cpu.cycle += 5; (RLA_u, ZeroPage)},
+        0x2F => {cpu.cycle += 6; (RLA_u, Absolute)},
+        0x33 => {cpu.cycle += 8; (RLA_u, IndirectIndexed)},
+        0x37 => {cpu.cycle += 6; (RLA_u, ZeroPageIndexedX)},
+        0x3B => {cpu.cycle += 7; (RLA_u, AbsoluteIndexedY)},
+        0x3F => {cpu.cycle += 7; (RLA_u, AbsoluteIndexedX)},
+
+        0x43 => {cpu.cycle += 8; (SRE_u, IndexedIndirect)},
+        0x47 => {cpu.cycle += 5; (SRE_u, ZeroPage)},
+        0x4F => {cpu.cycle += 6; (SRE_u, Absolute)},
+        0x53 => {cpu.cycle += 8; (SRE_u, IndirectIndexed)},
+        0x57 => {cpu.cycle += 6; (SRE_u, ZeroPageIndexedX)},
+        0x5B => {cpu.cycle += 7; (SRE_u, AbsoluteIndexedY)},
+        0x5F => {cpu.cycle += 7; (SRE_u, AbsoluteIndexedX)},
+
+        0x63 => {cpu.cycle += 8; (RRA_u, IndexedIndirect)},
+        0x67 => {cpu.cycle += 5; (RRA_u, ZeroPage)},
+        0x6F => {cpu.cycle += 6; (RRA_u, Absolute)},
+        0x73 => {cpu.cycle += 8; (RRA_u, IndirectIndexed)},
+        0x77 => {cpu.cycle += 6; (RRA_u, ZeroPageIndexedX)},
+        0x7B => {cpu.cycle += 7; (RRA_u, AbsoluteIndexedY)},
+        0x7F => {cpu.cycle += 7; (RRA_u, AbsoluteIndexedX)},
+        
         _ => panic!("Unrecognized opcode: ${:02X} PC:${:04X}", op_code, cpu.pc)
     }
 }
@@ -315,5 +415,17 @@ pub fn execute(cpu: &mut Cpu,
         DEC => { cpu.DEC(mem, instr.1); },
         INC => { cpu.INC(mem, instr.1); },
         NOP => { cpu.NOP(); },
+
+        // Unofficial opcodes
+        NOP_u => { cpu.NOP_u(); },
+        LAX_u => { cpu.LAX_u(mem, instr.1); },
+        SAX_u => { cpu.SAX_u(mem, instr.1); },
+        SBC_u => { cpu.SBC(mem, instr.1); },
+        DCP_u => { cpu.DCP_u(mem, instr.1); },
+        ISC_u => { cpu.ISC_u(mem, instr.1); },
+        SLO_u => { cpu.SLO_u(mem, instr.1); },
+        RLA_u => { cpu.RLA_u(mem, instr.1); },
+        SRE_u => { cpu.SRE_u(mem, instr.1); },
+        RRA_u => { cpu.RRA_u(mem, instr.1); },
     }
 }

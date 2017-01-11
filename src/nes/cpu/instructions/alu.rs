@@ -8,71 +8,38 @@ use super::AddressingMode;
 // PRETTIFYME: Abstract the similiar bits
 /// ALU Instructions
 impl Cpu {
-    // Checks zero and negative flag. Individual functions are responsible
-    // for others
-    fn alu_check_flags(&mut self, reg: Register) {
-        let check_reg = match reg {
-            Register::A => self.a,
-            Register::X => self.x,
-            Register::Y => self.y,
-        };
-        
-        if check_reg == 0 {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
-        if check_reg & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
-    }
-    
     /// BIt Test.
     pub fn BIT(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         let result = val & self.a;
 
-        if result == 0 {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
-
-        if val & (1 << 6) != 0 {
-            self.set_flag(StatusFlag::Overflow, true);
-        } else {
-            self.set_flag(StatusFlag::Overflow, false);
-        }
-
-        if val & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
-
+        self.set_flag(StatusFlag::Zero, result == 0);
+        self.set_flag(StatusFlag::Overflow, val & (1 << 6) != 0);
+        self.set_flag(StatusFlag::Negative, val & (1 << 7) != 0);
     }
 
     /// OR with Accumulator.
     pub fn ORA(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         self.a = self.a | val;
-        self.alu_check_flags(Register::A);
+        let a = self.a;
+        self.set_zn_flags(a);
     }
 
     /// AND with accumulator.
     pub fn AND(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         self.a = self.a & val;
-        self.alu_check_flags(Register::A);
+        let a = self.a;
+        self.set_zn_flags(a);
     }
 
     /// Exclusive OR with accumulator.
     pub fn EOR(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let val = self.fetch_byte(mem, addr_mode);
         self.a = self.a ^ val;
-        self.alu_check_flags(Register::A);
+        let a = self.a;
+        self.set_zn_flags(a);
     }
 
     /// ADd with Carry
@@ -87,7 +54,8 @@ impl Cpu {
         let sum = (val as u8).wrapping_add(self.a).wrapping_add(self.p & 0b1);
 
         self.a = sum;
-        self.alu_check_flags(Register::A);
+        let a = self.a;
+        self.set_zn_flags(a);
         self.set_flag(StatusFlag::Carry, set_carry);
         self.set_flag(StatusFlag::Overflow, set_overflow);
     }
@@ -106,7 +74,8 @@ impl Cpu {
         let diff = (val as u8).wrapping_add(self.a).wrapping_add(self.p & 0b1);
 
         self.a = diff;
-        self.alu_check_flags(Register::A);
+        let a = self.a;
+        self.set_zn_flags(a);
         self.set_flag(StatusFlag::Carry, set_carry);
         self.set_flag(StatusFlag::Overflow, set_overflow);
     }
@@ -116,75 +85,36 @@ impl Cpu {
     pub fn CMP(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
 
-        if self.a >= val {
-            self.set_flag(StatusFlag::Carry, true);
-        } else {
-            self.set_flag(StatusFlag::Carry, false);
-        }
+        let a = self.a;
+        self.set_flag(StatusFlag::Carry, a >= val);
+        self.set_flag(StatusFlag::Zero, a == val);
 
-        if self.a == val {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
-
-        val = (self.a).wrapping_sub(val);
-
-        if val & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
+        val = a.wrapping_sub(val);
+        self.set_flag(StatusFlag::Negative, val & (1 << 7) != 0);
     }
 
     /// ComPare Y register.
     pub fn CPY(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
 
-        if self.y >= val {
-            self.set_flag(StatusFlag::Carry, true);
-        } else {
-            self.set_flag(StatusFlag::Carry, false);
-        }
-
-        if self.y == val {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
+        let y = self.y;
+        self.set_flag(StatusFlag::Carry, y >= val);
+        self.set_flag(StatusFlag::Zero, y == val);
 
         val = (self.y).wrapping_sub(val);
-
-        if val & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
+        self.set_flag(StatusFlag::Negative, val & (1 << 7) != 0);
     }
 
     /// ComPare X register.
     pub fn CPX(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let mut val = self.fetch_byte(mem, addr_mode);
 
-        if self.x >= val {
-            self.set_flag(StatusFlag::Carry, true);
-        } else {
-            self.set_flag(StatusFlag::Carry, false);
-        }
-
-        if self.x == val {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
+        let x = self.x;
+        self.set_flag(StatusFlag::Carry, x >= val);
+        self.set_flag(StatusFlag::Zero, x == val);
 
         val = (self.x).wrapping_sub(val);
-
-        if val & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
+        self.set_flag(StatusFlag::Negative, val & (1 << 7) != 0);
     }
 
     /// Arithmetic Shift Left. 
@@ -192,25 +122,12 @@ impl Cpu {
         let mut val = self.fetch_byte(mem, addr_mode);
 
         // Carry set to bit 7
-        if val & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Carry, true);
-        } else {
-            self.set_flag(StatusFlag::Carry, false);
-        }
+        self.set_flag(StatusFlag::Carry, val & (1 << 7) != 0);
 
         val = val << 1;
 
-        if val == 0 {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
-
-        if val & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
+        self.set_flag(StatusFlag::Zero, val == 0);
+        self.set_flag(StatusFlag::Negative, val & (1 << 7) != 0);
 
         self.set_byte(mem, addr_mode, val);
     }
@@ -220,25 +137,12 @@ impl Cpu {
         let mut val = self.fetch_byte(mem, addr_mode);
 
         // Carry set to bit 0
-        if val & (1 << 0) != 0 {
-            self.set_flag(StatusFlag::Carry, true);
-        } else {
-            self.set_flag(StatusFlag::Carry, false);
-        }
+        self.set_flag(StatusFlag::Carry, val & (1 << 0) != 0);
 
         val = val >> 1;
 
-        if val == 0 {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
-
-        if val & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
+        self.set_flag(StatusFlag::Zero, val == 0);
+        self.set_flag(StatusFlag::Negative, val & (1 << 7) != 0);
 
         self.set_byte(mem, addr_mode, val);
     }
@@ -249,11 +153,7 @@ impl Cpu {
         let old_carry = self.check_flag(StatusFlag::Carry, true);
 
         // Carry set to bit 0
-        if val & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Carry, true);
-        } else {
-            self.set_flag(StatusFlag::Carry, false);
-        }
+        self.set_flag(StatusFlag::Carry, val & (1 << 7) != 0);
 
         val = val << 1;
 
@@ -263,18 +163,8 @@ impl Cpu {
             val = val & !(1 << 0);
         }
 
-        if val == 0 {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
-
-        if val & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
-
+        self.set_flag(StatusFlag::Zero, val == 0);
+        self.set_flag(StatusFlag::Negative, val & (1 << 7) != 0);
 
         self.set_byte(mem, addr_mode, val);
     }
@@ -285,11 +175,7 @@ impl Cpu {
         let old_carry = self.check_flag(StatusFlag::Carry, true);
 
         // Carry set to bit 0
-        if val & (1 << 0) != 0 {
-            self.set_flag(StatusFlag::Carry, true);
-        } else {
-            self.set_flag(StatusFlag::Carry, false);
-        }
+        self.set_flag(StatusFlag::Carry, val & (1 << 0) != 0);
 
         val = val >> 1;
 
@@ -299,18 +185,8 @@ impl Cpu {
             val = val & !(1 << 7);
         }
 
-        if val == 0 {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
-
-        if val & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
-
+        self.set_flag(StatusFlag::Zero, val == 0);
+        self.set_flag(StatusFlag::Negative, val & (1 << 7) != 0);
 
         self.set_byte(mem, addr_mode, val);
     }
