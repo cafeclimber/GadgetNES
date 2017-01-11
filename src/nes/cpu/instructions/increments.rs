@@ -1,7 +1,7 @@
 //! Instructions to increment / decrement memory values.
 #![allow(non_snake_case)]
 
-use nes::cpu::{Cpu, StatusFlag};
+use nes::cpu::Cpu;
 use nes::memory::Memory;
 use super::AddressingMode;
 

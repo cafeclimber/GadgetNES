@@ -1,7 +1,7 @@
 //! Arithmetic instructions
 #![allow(non_snake_case)]
 
-use nes::cpu::{Cpu, Register, StatusFlag};
+use nes::cpu::{Cpu, StatusFlag};
 use nes::memory::Memory;
 use super::AddressingMode;
 

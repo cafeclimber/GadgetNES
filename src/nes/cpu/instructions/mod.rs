@@ -34,6 +34,7 @@ pub enum AddressingMode {
 
 // TODO: Add unofficial ops
 #[derive(Debug, PartialEq, Copy, Clone)]
+#[allow(non_camel_case_types)]
 /// All 6502 instructions
 pub enum Instruction {
     BRK, PHP, PLP, PHA, PLA, TXS, TSX, BPL,

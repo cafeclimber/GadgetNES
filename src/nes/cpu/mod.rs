@@ -29,13 +29,6 @@ pub struct Cpu {
     pub cycle: u32,
 }
 
-// Registers used for flag checking. May change
-enum Register {
-    X,
-    Y,
-    A,
-}
-
 #[derive(Debug)]
 pub enum Interrupt {
     BRK,

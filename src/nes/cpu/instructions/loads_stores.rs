@@ -1,7 +1,7 @@
 //! Instructions which load from / store to memory.
 #![allow(non_snake_case)]
 
-use nes::cpu::{Cpu, Register, StatusFlag};
+use nes::cpu::Cpu;
 use nes::memory::Memory;
 use super::AddressingMode;
 

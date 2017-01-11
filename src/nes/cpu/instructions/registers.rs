@@ -1,7 +1,7 @@
 //! Register related increments and decrements.
 #![allow(non_snake_case)]
 
-use nes::cpu::{Cpu, StatusFlag, Register};
+use nes::cpu::Cpu;
 
 /// Increment / decrement instructions for registers
 impl Cpu {

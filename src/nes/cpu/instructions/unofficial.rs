@@ -28,7 +28,7 @@ impl Cpu {
     pub fn DCP_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         // Equivalent to DEV value then CMP value
         // Flags are weird which is why INC isn't called directly
-        let mut val = self.fetch_byte(mem, addr_mode);
+        let val = self.fetch_byte(mem, addr_mode);
         let result = val.wrapping_sub(1);
         self.set_byte(mem, addr_mode, result);
 
@@ -41,7 +41,7 @@ impl Cpu {
     pub fn ISC_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         // Equivalent to INC value then SBC value
         // Flags are weird which is why INC isn't called directly
-        let mut val = self.fetch_byte(mem, addr_mode);
+        let val = self.fetch_byte(mem, addr_mode);
         let result = val.wrapping_add(1);
         self.set_byte(mem, addr_mode, result);
 
