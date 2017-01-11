@@ -13,7 +13,8 @@ const BRK_IRQ_VECTOR: u16 = 0xFFFE;
 
 /// A *nearly* cycle-accurate representation of
 /// the 6502 processor as used in the NES (ignores
-/// branch cycles and page boundary crossings)
+/// branch results and page boundary crossings in
+/// cycle calculations)
 ///
 /// The CPU also contains a memory_map struct which provides an interface
 /// For RAM, I/O, etc.
@@ -134,7 +135,7 @@ impl Cpu {
         self.push_stack(mem, addr_high);
         self.push_stack(mem, addr_low);
         self.pc = read_word(mem, vector);
-        #[cfg(feature="debug")]
+        #[cfg(feature="debug_cpu")]
         println!("\n!!!!!!!!!!!!!!!!!!!!!  Asserting {:?} interrupt with addr: {:#04X} !!!!!!!!!!!!!!!!!!!!!\n",
                  interrupt,
                  self.pc);
@@ -147,7 +148,7 @@ impl Cpu {
         let op_code = read_byte(mem, self.pc);
         let (inst, addr_mode) = decode(self, op_code);
 
-        #[cfg(feature="debug")]
+        #[cfg(feature="debug_cpu")]
         debug_print(&self, op_code, inst, mem, addr_mode);
 
         execute(self, mem, (inst, addr_mode));
@@ -284,10 +285,7 @@ impl Cpu {
 }
 
 
-// TODO: Fix this so as to not screw with PPU read/write privileges
-#[cfg(feature="debug")]
-// Could probably split up but don't really care, it's just printing for now...
-// Probably a much better way to do this than readdressing memory, but....whateva
+#[cfg(feature="debug_cpu")]
 fn debug_print(cpu: &Cpu,
                op_code: u8,
                instr: Instruction,
@@ -314,7 +312,7 @@ fn debug_print(cpu: &Cpu,
                    cpu.get_addr(mem, addr_mode))
         },
         AddressingMode::AbsoluteIndexedX => {
-            print!(" ${:04X},X                     ",
+            print!(" ${:04X},X                             ",
                    cpu.get_addr(mem, addr_mode))
         },
         AddressingMode::AbsoluteIndexedY => {
@@ -329,11 +327,11 @@ fn debug_print(cpu: &Cpu,
             print!(" ($ADDR)                            ")
         },
         AddressingMode::IndexedIndirect => {
-            print!(" (${:04X},X)                 ",
+            print!(" (${:02X},X)                           ",
                    cpu.get_addr(mem, addr_mode))
         },
         AddressingMode::IndirectIndexed => {
-            print!(" (${:04X}),Y                         ",
+            print!(" (${:02X}),Y                         ",
                    cpu.get_addr(mem, addr_mode))
         },
         AddressingMode::ZeroPage => {

@@ -27,9 +27,9 @@ impl<'a> Graphics<'a> {
             .position_centered()
             .build().unwrap();
 
-        let mut renderer = window.renderer().build().unwrap();
+        let renderer = window.renderer().build().unwrap();
 
-        let mut texture = renderer.create_texture_streaming(
+        let texture = renderer.create_texture_streaming(
             PixelFormatEnum::RGB24,
             SCREEN_WIDTH as u32,
             SCREEN_HEIGHT as u32).unwrap();

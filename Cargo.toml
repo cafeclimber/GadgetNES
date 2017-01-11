@@ -8,4 +8,7 @@ rand = "0.3.15"
 sdl2 = "0.21.0"
 
 [features]
-debug = []
+default = []
+
+debug_cpu = []
+debug_ppu = []

@@ -15,7 +15,7 @@ pub struct MemoryMap {
     /// Palette ram
     palette: [u8;0x20],
     /// PPU contains 256 bytes of object memory for sprite data.
-    oam: [u8; 0x100],
+    // oam: [u8; 0x100],
 
     /// CHR memory (from cartridge)
     chr: Rc<RefCell<Box<Mapper>>>,
@@ -31,7 +31,7 @@ impl MemoryMap {
         MemoryMap {
             vram: [0xFF; 0x800],
             palette: [0; 0x20],
-            oam: [0; 0x100],
+            // oam: [0; 0x100],
             chr: mapper,
             // Memory map has to be aware of nametable mirroring in order
             // to properly...map...memory
@@ -74,7 +74,7 @@ impl MemMapped for MemoryMap {
             // Maps both pattern tables to CHR-ROM
             // TODO: Not sure if correct
             PAT_TABLE_0_BEG...PAT_TABLE_1_END => {
-                self.chr.borrow_mut().read_chr_byte(addr)
+                self.chr.borrow().read_chr_byte(addr)
             },
             // Unclear how 4 way mirroring works
             NAMETABLE_0_BEG...NAMETABLE_3_END => {
@@ -105,11 +105,12 @@ impl MemMapped for MemoryMap {
                 self.vram[addr] = val;
             },
             PALETTE_RAM_BEG...PALETTE_RAM_END => {
-                panic!("Wrote to palette ram! {:04X} = {:02X}", addr, val);
-                self.palette[(addr - PALETTE_RAM_BEG) as usize] = val;
+                panic!("Invalid attempt to write to PPU memory: {:04X}", addr);
             },
-            PALETTE_MIRRORS_BEG...PALETTE_MIRRORS_END => {},
-            _ => panic!("Invalid attempt to write to PPU memory: {:04X}", addr)
+            PALETTE_MIRRORS_BEG...PALETTE_MIRRORS_END => {
+                panic!("Invalid attempt to write to PPU memory: {:04X}", addr);
+            },
+            _ => panic!("Invalid attempt to write to PPU memory: {:04X}", addr),
         }
     }
 }

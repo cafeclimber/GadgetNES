@@ -59,7 +59,7 @@ impl<'a> Nes<'a> {
             let frame_start = time::Instant::now();
             let nmi = self.mem.ppu.step(self.cpu.cycle);
             if nmi {
-                #[cfg(feature="debug")]
+                #[cfg(feature="debug_ppu")]
                 println!("###################################### VB\
                           LANK ########################################");
                 self.cpu.interrupt(&mut self.mem, NMI);
@@ -69,12 +69,12 @@ impl<'a> Nes<'a> {
                 let target_frame_duration = time::Duration::new(0,NS_PER_FRAME);
                 if frame_duration < target_frame_duration {
                     let sleep_time = target_frame_duration - frame_duration;
-                    #[cfg(feature="debug")]
+                    #[cfg(feature="debug_ppu")]
                     println!("sleep_time: {:?}", sleep_time);
                     sleep(sleep_time);
                 }
             } else {
-                #[cfg(feature="debug")]
+                #[cfg(feature="debug_ppu")]
                 println!("###########################################\
                           ###########################################");
             }

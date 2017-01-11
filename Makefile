@@ -1,13 +1,13 @@
-.PHONY: all clean release debug doc
+.PHONY: all clean release debug_cpu doc
 
 # For now, default to building with DEBUG
 all: 
 	@clear
-	@cargo build --features "debug"
+	@cargo build --features "debug_cpu debug_ppu" 
 
-debug: 
+debug_cpu: 
 	@clear
-	@cargo build --features "debug"
+	@cargo build --features "debug_cpu"
 
 doc: 
 	cargo rustdoc -- \

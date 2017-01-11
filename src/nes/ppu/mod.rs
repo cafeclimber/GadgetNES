@@ -143,12 +143,6 @@ pub struct Ppu<'a> {
     scanline: Scanline,
     /// Essentially a frame buffer for SDL
     frame: [u8; SCREEN_SIZE],
-
-    /// One of two buffer of pixel information, meant to model the
-    /// PPU's internal latches. Buffer 1 is the initial buffer filled.
-    bg_buffer_1: BgPixelBuffer,
-    /// Buffer 2 is the buffer which is about to be rendered.
-    bg_buffer_2: BgPixelBuffer,
     /*########################################################################*/
 
     /// PPU has its own memory map which is modeled here as owning
@@ -187,49 +181,6 @@ impl Scanline {
     }
 }
 
-#[derive(Copy, Clone)]
-pub struct Pixel {
-    pub red: u8,
-    pub green: u8,
-    pub blue: u8,
-}
-
-impl Default for Pixel {
-    fn default() -> Pixel {
-        Pixel {
-            red: 255,
-            green: 255,
-            blue: 255,
-        }
-    }
-}
-
-/// The NES had two latches for buffering pixel data.
-#[derive(Default, Copy, Clone)]
-struct BgPixelBuffer {
-    pixels: [Pixel; 8],
-}
-
-impl BgPixelBuffer {
-    // From NES Dev wiki
-    pub fn refresh_buffer(&mut self,
-                          mem_map: &mut MemoryMap,
-                          addr: u16,
-                          patt_base: u16)
-    {
-        let mut tile_addr = 0x2000 | (addr & 0x0FFF);
-        let tile_no = mem_map.read_byte(tile_addr) as u16;
-        tile_addr = tile_no * 8; // tiles are 8 bits wide
-        let tile_byte = mem_map.read_byte(tile_addr);
-
-        let patt_addr = 0x23C0 |
-                        (addr & 0x0C00) |
-                        ((addr >> 4) & 0x38) |
-                        ((addr >> 2) & 0x07);
-
-    }
-}
-
 impl<'a> Ppu<'a> {
     pub fn new(mapper: Rc<RefCell<Box<Mapper>>>,
                sdl_context: &Sdl,
@@ -256,9 +207,6 @@ impl<'a> Ppu<'a> {
             scanline: Scanline::Visible(0),
             frame: [0; SCREEN_SIZE],
 
-            bg_buffer_1: BgPixelBuffer::default(),
-            bg_buffer_2: BgPixelBuffer::default(),
-
             memory_map: MemoryMap::new(mapper, mirroring),
 
             graphics: Graphics::new(sdl_context),
@@ -271,7 +219,7 @@ impl<'a> Ppu<'a> {
     /// purpose of this function is to fill the frame buffer
     /// and generate an NMI when it enters VBLANK.
     pub fn step(&mut self, cpu_cycle: u32) -> bool {
-        #[cfg(feature="debug")]
+        #[cfg(feature="debug_ppu")]
         println!("{:?}", self);
         let mut nmi = false;
         while self.cycle < cpu_cycle {
@@ -290,255 +238,36 @@ impl<'a> Ppu<'a> {
     }
 
     fn prerender(&mut self) {
-        self.cycle += CPU_CYCLES_PER_SCANLINE;
-        self.set_vblank(false);
-        self.current_v_addr = self.temp_v_addr;
-        let patt_base = self.bg_pattern_table_base();
-        let addr = self.current_v_addr;
-        self.bg_buffer_1.refresh_buffer(&mut self.memory_map, addr, patt_base);
-        self.scanline = Scanline::Visible(0);
     }
 
     fn scanline(&mut self, line: u8) {
-        self.cycle += CPU_CYCLES_PER_SCANLINE;
-
-        let patt_base = self.bg_pattern_table_base();
-        for byte in 0..BYTES_PER_SCANLINE {
-            let offset = (line as usize) * (SCREEN_WIDTH * 3 as usize) + (byte * 24);
-            for bit in 0..8 {
-                self.frame[offset + (3 * bit)] =
-                    self.bg_buffer_2.pixels[bit].red;
-                self.frame[offset + (3 * bit) + 1] =
-                    self.bg_buffer_2.pixels[bit].green;
-                self.frame[offset + (3 * bit) + 2] =
-                    self.bg_buffer_2.pixels[bit].blue;
-            }
-            if self.show_bg() {
-                self.coarse_x_increment();
-            }
-            self.bg_buffer_2 = self.bg_buffer_1;
-            let addr = self.current_v_addr;
-            self.bg_buffer_1.refresh_buffer(&mut self.memory_map,
-                                            addr,
-                                            patt_base);
-        }
-        if self.show_bg() {
-            self.y_increment();
-        }
-        self.bg_buffer_2 = self.bg_buffer_1;
-        let addr = self.current_v_addr;
-        self.bg_buffer_1.refresh_buffer(&mut self.memory_map,
-                                        addr,
-                                        patt_base);
+        // TODO
     }
 
     fn postrender(&mut self) {
-        self.cycle += CPU_CYCLES_PER_SCANLINE;
+        // TODO
     }
 
     fn vblank(&mut self) -> bool {
-        self.set_vblank(true);
-        self.graphics.display_frame(&mut self.frame);
-        self.cycle += CPU_CYCLES_PER_SCANLINE;
-        if self.generate_nmi() { true } else { false }
+        // TODO
+        false
     }
-
-    fn set_vblank(&mut self, set: bool) {
-        match set {
-            true => self.ppu_status |= 1 << 7,
-            false => self.ppu_status &= !(1 << 7),
-        }
-    }
-
-    // Directly from dev wiki
-    // TODO: Optimize
-    fn coarse_x_increment(&mut self) {
-        if self.current_v_addr & 0x001F == 31 {
-            self.current_v_addr &= !(0x001F);
-            self.current_v_addr ^=0x0400;
-        } else {
-            self.current_v_addr += 1;
-        }
-    }
-
-    // Directly from NES dev wiki
-    fn y_increment(&mut self) {
-        if (self.current_v_addr & 0x7000) != 0x7000 {
-            self.current_v_addr += 0x1000;
-        }
-        else {
-            self.current_v_addr &= !(0x7000);
-            let mut y = (self.current_v_addr & 0x03E0) >> 5;
-            if y == 29 {
-                y = 0;
-                self.current_v_addr ^= 0x0800;
-            }
-            else if y == 31 { y = 0; }
-            else { y += 1; }
-            self.current_v_addr = (self.current_v_addr & !(0x03E0)) | (y << 5);
-        }
-    }
-
 
     /// Sets the vblank and sprite overflow bits of PPUSTATUS as this
     /// was commonly the state of the PPU after power on and warm up.
     pub fn power_up(&mut self) {
         self.ppu_status = 0b1010_0000;
-
     }
-
-    /* ######################### PPUCTRL helpers ######################### */
-    /// Returns which nametable is indicated by PPUCTRL
-    fn nametable_base_addr(&self) -> u16 {
-        match self.ppu_ctrl & 0b11 {
-            0b00 => 0x2000 as u16,
-            0b01 => 0x2400 as u16,
-            0b10 => 0x2800 as u16,
-            0b11 => 0x2C00 as u16,
-            _ => unreachable!()
-        }
-    }
-    /// Bit 0 of PPUCTRL determines the increment of VRAM address to
-    /// be either 1 or 32
-    fn vram_increment(&self) -> u16 {
-        (((self.ppu_ctrl & (1 << 2)) >> 2) * 32) as u16
-    }
-    /// Returns the base address of the current nametable.
-    fn sprite_pattern_table_base(&self) -> usize {
-        (((self.ppu_ctrl & (1 << 3)) >> 3) as u16 * 0x1000) as usize
-    }
-    /// Returns the base address of the current background pattern table.
-    fn bg_pattern_table_base(&self) -> u16 {
-        (((self.ppu_ctrl & (1 << 4)) >> 4) as u16 * 0x1000)
-    }
-    /// Returns whether an NMI should be generated at the start of the next
-    /// VBLANK interval.
-    fn generate_nmi(&self) -> bool { self.ppu_ctrl & (1 << 7) != 0 }
-
-    /* ######################### PPUMASK helpers ########################## */
-    // fn greyscale(&self) -> bool { self.ppu_mask & (1 << 0) != 0 }
-    // fn show_bg_left(&self) -> bool { self.ppu_mask & (1 << 1) != 0 }
-    // fn show_sprites_left(&self) -> bool { self.ppu_mask & (1 << 2) != 0 }
-    fn show_bg(&self) -> bool { self.ppu_mask & (1 << 3) != 0 }
-    // fn show_sprites(&self) -> bool { self.ppu_mask & (1 << 4) != 0 }
-    // fn emph_red(&self) -> bool { self.ppu_mask & (1 << 5) != 0 }
-    // fn emph_gre(&self) -> bool { self.ppu_mask & (1 << 6) != 0 }
-    // fn emph_blu(&self) -> bool { self.ppu_mask & (1 << 7) != 0 }
-
-    /* ######################### PPUSTATUS helpers ######################## */
-    // pub fn sprite_overflow(&self) -> bool { self.ppu_mask & (1 << 5) != 0 }
-    // pub fn sprite_0_hit(&self) -> bool { self.ppu_mask & (1 << 6) != 0 }
-    // pub fn gen_vblank(&self) -> bool { self.ppu_mask & (1 << 6) != 0 }
 }
 
-// TODO: Correctly implement these
-// TODO: Read is supposed to clear the W latch...
 impl<'a> MemMapped for Ppu<'a> {
     fn read_byte(&mut self, addr: u16) -> u8 {
-        match addr {
-            0x2000 => self.ppu_ctrl,
-            0x2001 => self.ppu_mask,
-            0x2002 => {
-                self.write = Write::One;
-                let val = self.ppu_status;
-                self.ppu_status &= 0x7F;
-                val
-            },
-            0x2003 => self.oam_addr,
-            0x2004 => self.oam_data,
-            0x2005 => self.ppu_scroll,
-            0x2006 => self.ppu_addr,
-            0x2007 => {
-                let current_v_addr = self.nametable_base_addr() |
-                                     (self.current_v_addr & 0x0FFF);
-                self.current_v_addr += self.vram_increment();
-                self.memory_map.read_byte(current_v_addr)
-            }
-            0x4014 => self.oam_dma,
-            _ => panic!("Unrecognized PPU location: {:#04X}", addr)
-        }
+        // TODO
+        0
     }
 
     fn write_byte(&mut self, addr: u16, val: u8) {
-        match addr {
-            0x2000 => {
-                self.ppu_ctrl = val;
-                // TODO Should I just or this in?
-                self.temp_v_addr = ((val & 0b11) as u16) << 10;
-            },
-            0x2001 => self.ppu_mask = val,
-            0x2002 => panic!("Read only register: PPUSTATUS"),
-            0x2003 => self.oam_addr = val,
-            0x2004 => self.oam_data = val,
-            0x2005 => {
-                self.ppu_scroll = val;
-                match self.write {
-                    Write::One => {
-                        // Turn off lower five bits then OR in upper 5 of val
-                        self.temp_v_addr =
-                            (self.temp_v_addr & 0xFFE0) | ((val as u16) >> 3);
-
-                        self.x_scroll_fine = val & 0b111; // Keep lower 3 bits
-                        self.write = Write::Two;
-                    },
-                    Write::Two => {
-                        self.temp_v_addr =
-                            (self.temp_v_addr & 0x0C1F) |
-                            ((val as u16 & 0xF8) << 2) |
-                            ((val as u16 & 0b111) << 12);
-                        self.write = Write::One;
-                    },
-                }
-            }
-            0x2006 => {
-                self.ppu_addr = val;
-                match self.write {
-                    Write::One => {
-                        self.temp_v_addr =
-                            (self.temp_v_addr & 0x00FF) |
-                            ((val as u16) & 0x3F) << 9;
-                        self.write = Write::Two;
-                    },
-                    Write::Two => {
-                        self.temp_v_addr =
-                            (self.temp_v_addr & 0xFF00) | val as u16;
-
-                        self.current_v_addr = self.temp_v_addr;
-                        self.write = Write::One;
-                    },
-                }
-            }
-            0x2007 => {
-                let current_v_addr = self.nametable_base_addr() |
-                                     (self.current_v_addr & 0x0FFF);
-                self.memory_map.write_byte(current_v_addr, val);
-                self.current_v_addr += self.vram_increment();
-            },
-            0x4014 => self.oam_addr = val,
-            _ => panic!("Unrecognized PPU location: {:#04X}", addr)
-        }
-        
-    }
-}
-
-impl fmt::Debug for BgPixelBuffer {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({:02X},{:02X},{:02X}) \
-                   ({:02X},{:02X},{:02X}) \
-                   ({:02X},{:02X},{:02X}) \
-                   ({:02X},{:02X},{:02X}) \
-                   ({:02X},{:02X},{:02X}) \
-                   ({:02X},{:02X},{:02X}) \
-                   ({:02X},{:02X},{:02X}) \
-                   ({:02X},{:02X},{:02X}) ",
-               self.pixels[0].red, self.pixels[0].green, self.pixels[0].blue,
-               self.pixels[1].red, self.pixels[1].green, self.pixels[1].blue,
-               self.pixels[2].red, self.pixels[2].green, self.pixels[2].blue,
-               self.pixels[3].red, self.pixels[3].green, self.pixels[3].blue,
-               self.pixels[4].red, self.pixels[4].green, self.pixels[4].blue,
-               self.pixels[5].red, self.pixels[5].green, self.pixels[5].blue,
-               self.pixels[6].red, self.pixels[6].green, self.pixels[6].blue,
-               self.pixels[7].red, self.pixels[7].green, self.pixels[7].blue)
+        // TODO
     }
 }
 
@@ -546,8 +275,8 @@ impl<'a> fmt::Debug for Ppu<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "PPUCTRL:{:02X} PPUMASK:{:02X} PPUSTATUS:{:02X}              \
 SCANLINE:{:?}    PPU CYC:{:5?}
-OAMADDR:{:02X} OAMDATA:{:02X} PPUSCROLL:{:02X}              BG_BUFFER_1: {:?}
-PPUADDR:{:02X} PPUDATA:{:02X} OAMDMA:   {:02X}              BG_BUFFER_2: {:?}
+OAMADDR:{:02X} OAMDATA:{:02X} PPUSCROLL:{:02X}
+PPUADDR:{:02X} PPUDATA:{:02X} OAMDMA:   {:02X}
 T:{:04X} V:{:04X} X:{:03b} W:{:?}",
                self.ppu_ctrl,
                self.ppu_mask,
@@ -557,11 +286,9 @@ T:{:04X} V:{:04X} X:{:03b} W:{:?}",
                self.oam_addr,
                self.oam_data,
                self.ppu_scroll,
-               self.bg_buffer_1,
                self.ppu_addr,
                self.ppu_data,
                self.oam_data,
-               self.bg_buffer_2,
                self.temp_v_addr,
                self.current_v_addr,
                self.x_scroll_fine,
