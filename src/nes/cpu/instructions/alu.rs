@@ -77,54 +77,40 @@ impl Cpu {
 
     /// ADd with Carry
     pub fn ADC(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
-        let val = self.fetch_byte(mem, addr_mode);
-        let sum = val.wrapping_add(self.a + {
-            if self.check_flag(StatusFlag::Carry, true) {
-                1
-            } else {
-                0
-            }});
+        // See StackOverflow question 29193303
+        let val = self.fetch_byte(mem, addr_mode) as u16;
+        let a = self.a as u16;
+        let sum = val + a + (self.p & 0b1) as u16;
+        let set_carry = sum > 0xFF;
+        let set_overflow = (!(a ^ val) & (a ^ sum) & 0x80) != 0; 
 
-        if sum < val {
-            self.set_flag(StatusFlag::Carry, true);
-        } else {
-            self.set_flag(StatusFlag::Carry, false);
-        }
-
-        if sum & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
-
-        if sum == 0 {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
-
-        if self.a & (1 << 7) == 0 &&
-            val & (1 << 7) == 0 // both positive
-        {
-            if sum & (1 << 7) != 0 {
-                self.set_flag(StatusFlag::Overflow, true);
-            } else {
-                self.set_flag(StatusFlag::Overflow, false);
-            }
-        } else if self.a & (1 << 7) != 0 &&
-                   val & (1 << 7) != 0 // both negative
-        {
-            if sum & (1 << 7) == 0 {
-                self.set_flag(StatusFlag::Overflow, true);
-            } else {
-                self.set_flag(StatusFlag::Overflow, false);
-            }
-        } else {
-            self.set_flag(StatusFlag::Overflow, false);
-        }
+        let sum = (val as u8).wrapping_add(self.a).wrapping_add(self.p & 0b1);
 
         self.a = sum;
+        self.alu_check_flags(Register::A);
+        self.set_flag(StatusFlag::Carry, set_carry);
+        self.set_flag(StatusFlag::Overflow, set_overflow);
     }
+
+    // PRETTIFYME: Jesus....
+    // TODO: Check this carefully!
+    /// SuBtract with Carry
+    pub fn SBC(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
+        // See StackOverflow question 29193303
+        let val = !(self.fetch_byte(mem, addr_mode)) as u16;
+        let a = self.a as u16;
+        let diff = val + a + (self.p & 0b1) as u16;
+        let set_carry = diff > 0xFF;
+        let set_overflow = (!(a ^ val) & (a ^ diff) & 0x80) != 0; 
+
+        let diff = (val as u8).wrapping_add(self.a).wrapping_add(self.p & 0b1);
+
+        self.a = diff;
+        self.alu_check_flags(Register::A);
+        self.set_flag(StatusFlag::Carry, set_carry);
+        self.set_flag(StatusFlag::Overflow, set_overflow);
+    }
+
 
     /// CoMPare accumulator.
     pub fn CMP(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
@@ -199,60 +185,6 @@ impl Cpu {
         } else {
             self.set_flag(StatusFlag::Negative, false);
         }
-    }
-
-    // PRETTIFYME: Jesus....
-    // TODO: Check this carefully!
-    /// SuBtract with Carry
-    pub fn SBC(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
-        let val = self.fetch_byte(mem, addr_mode);
-        let diff = self.a.wrapping_sub(val) - (1 - {
-            if self.check_flag(StatusFlag::Carry, true) {
-                1
-            } else {
-                0
-            }
-        });
-
-        if val > self.a {
-            self.set_flag(StatusFlag::Carry, false);
-        } else {
-            self.set_flag(StatusFlag::Carry, true);
-        }
-
-        if diff & (1 << 7) != 0 {
-            self.set_flag(StatusFlag::Negative, true);
-        } else {
-            self.set_flag(StatusFlag::Negative, false);
-        }
-
-        if diff == 0 {
-            self.set_flag(StatusFlag::Zero, true);
-        } else {
-            self.set_flag(StatusFlag::Zero, false);
-        }
-
-        if self.a & (1 << 7) == 0 &&
-            val & (1 << 7) != 0 // first positive second negative 
-        {
-            if diff & (1 << 7) != 0 { // result negative
-                self.set_flag(StatusFlag::Overflow, true);
-            } else {
-                self.set_flag(StatusFlag::Overflow, false);
-            }
-        } else if self.a & (1 << 7) != 0 &&
-                   val & (1 << 7) == 0 // first negative second positive
-        {
-            if diff & (1 << 7) == 0 { // result positive
-                self.set_flag(StatusFlag::Overflow, true);
-            } else {
-                self.set_flag(StatusFlag::Overflow, false);
-            }
-        } else {
-            self.set_flag(StatusFlag::Overflow, false);
-        }
-
-        self.a = diff;
     }
 
     /// Arithmetic Shift Left. 

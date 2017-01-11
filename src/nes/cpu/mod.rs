@@ -312,11 +312,11 @@ fn debug_print(cpu: &Cpu,
                    cpu.get_addr(mem, addr_mode))
         },
         AddressingMode::AbsoluteIndexedX => {
-            print!(" ${:04X},X                             ",
+            print!(" ${:04X},X                           ",
                    cpu.get_addr(mem, addr_mode))
         },
         AddressingMode::AbsoluteIndexedY => {
-            print!(" ${:04X},Y                      ",
+            print!(" ${:04X},Y                           ",
                    cpu.get_addr(mem, addr_mode))
         },
         AddressingMode::Immediate => {
@@ -339,11 +339,11 @@ fn debug_print(cpu: &Cpu,
                    cpu.get_addr(mem, addr_mode))
         },
         AddressingMode::ZeroPageIndexedX => {
-            print!(" ${:02X},X                      ",
+            print!(" ${:02X},X                             ",
                    cpu.get_addr(mem, addr_mode))
         },
         AddressingMode::ZeroPageIndexedY => {
-            print!(" ${:02X},Y                        ",
+            print!(" ${:02X},Y                             ",
                    cpu.get_addr(mem, addr_mode))
         },
     }
