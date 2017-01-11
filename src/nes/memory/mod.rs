@@ -73,7 +73,6 @@ impl<'a> Memory<'a> {
 
     /// Reads a byte from PRG-ROM as defined by the mapper.
     pub fn read_rom_byte(&self, addr: u16) -> u8 {
-        println!("Reading rom at: {:#X}", addr);
         self.prg.borrow().read_rom_byte(addr)
     }
 }
