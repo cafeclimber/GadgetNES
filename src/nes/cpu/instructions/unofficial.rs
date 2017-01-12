@@ -69,4 +69,83 @@ impl Cpu {
         self.ROR(mem, addr_mode);
         self.ADC(mem, addr_mode);
     }
+
+    pub fn ALR_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
+        self.AND(mem, addr_mode);
+        self.LSR(mem, AddressingMode::Implied);
+    }
+
+    pub fn ANC_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
+        self.AND(mem, addr_mode);
+        let n = self.a & (1 << 7) != 0;
+        self.set_flag(StatusFlag::Carry, n);
+    }
+
+    pub fn ARR_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
+        let val= self.fetch_byte(mem, addr_mode);
+        self.a = self.a & val;
+        self.a = self.a << 1;
+        let a = self.a;
+        self.set_zn_flags(a);
+        self.set_flag(StatusFlag::Carry, a & (1 << 6) != 0);
+        self.set_flag(StatusFlag::Overflow,
+                      (a & (1 << 6) >> 6) ^ (a & (1 << 5) >> 5) != 0);
+    }
+
+    pub fn AXS_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
+        let val = self.fetch_byte(mem, addr_mode);
+        let a = self.a;
+        let x = self.x;
+        let result = (a & x).wrapping_sub(val);
+        self.set_zn_flags(result);
+        self.set_flag(StatusFlag::Carry, (a & x) < val);
+    }
+
+    pub fn AXA_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
+        let a = self.a;
+        let x = self.x;
+        let val = (x & a) & 7;
+        self.set_byte(mem, addr_mode, val);
+    }
+
+    pub fn XAS_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
+        let a = self.a;
+        let x = self.x;
+        self.sp = x & a;
+        let sp = self.sp;
+        let addr = (((self.get_addr(mem, addr_mode)) & 0xF0) >> 8) as u8;
+        let result = sp & (addr.wrapping_add(1));
+        self.set_byte(mem, addr_mode, result);
+    }
+
+    pub fn SYA_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
+        let y = self.y;
+        let addr = (((self.get_addr(mem, addr_mode)) & 0xF0) >> 8) as u8;
+        let result = y & (addr.wrapping_add(1));
+        self.set_byte(mem, addr_mode, result);
+    }
+
+    pub fn SXA_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
+        let x = self.x;
+        let addr = (((self.get_addr(mem, addr_mode)) & 0xF0) >> 8) as u8;
+        let result = x & (addr.wrapping_add(1));
+        self.set_byte(mem, addr_mode, result);
+    }
+
+    pub fn ATX_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
+        let byte = self.fetch_byte(mem, addr_mode);
+        self.a = self.a & byte;
+        self.x = self.a;
+        let x = self.x;
+        self.set_zn_flags(x);
+    }
+
+    pub fn LAR_u(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
+        let val = self.fetch_byte(mem, addr_mode);
+        self.sp = self.sp & val;
+        self.x = self.sp;
+        self.a = self.sp;
+        let a = self.a;
+        self.set_zn_flags(a);
+    }
 }

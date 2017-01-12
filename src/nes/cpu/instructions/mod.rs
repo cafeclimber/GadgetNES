@@ -47,7 +47,9 @@ pub enum Instruction {
 
     // Below are unofficial opcodes denoted by an appended _u
     NOP_u, LAX_u, SAX_u, SBC_u, DCP_u, ISC_u,
-    SLO_u, RLA_u, SRE_u, RRA_u,
+    SLO_u, RLA_u, SRE_u, RRA_u, ALR_u, ANC_u,
+    ARR_u, AXS_u, AXA_u, XAS_u, SYA_u, SXA_u,
+    ATX_u, LAR_u,
 }
 
 /// Takes an op_code fetched by the cpu and returns the
@@ -279,6 +281,7 @@ pub fn decode(cpu: &mut Cpu, op_code: u8) -> (Instruction, AddressingMode) {
         0x82 => {cpu.cycle += 2; (NOP_u, Immediate)},
         0x89 => {cpu.cycle += 2; (NOP_u, Immediate)},
         0xC2 => {cpu.cycle += 2; (NOP_u, Immediate)},
+        0xE2 => {cpu.cycle += 2; (NOP_u, Immediate)},
 
         0x1C => {cpu.cycle += 4; (NOP_u, AbsoluteIndexedX)},
         0x3C => {cpu.cycle += 4; (NOP_u, AbsoluteIndexedX)},
@@ -348,8 +351,47 @@ pub fn decode(cpu: &mut Cpu, op_code: u8) -> (Instruction, AddressingMode) {
         0x77 => {cpu.cycle += 6; (RRA_u, ZeroPageIndexedX)},
         0x7B => {cpu.cycle += 7; (RRA_u, AbsoluteIndexedY)},
         0x7F => {cpu.cycle += 7; (RRA_u, AbsoluteIndexedX)},
+
+        0x4B => {cpu.cycle += 2; (ALR_u, Immediate)},
+
+        0x0B => {cpu.cycle += 2; (ANC_u, Immediate)},
+        0x2B => {cpu.cycle += 2; (ANC_u, Immediate)},
+
+        0x6B => {cpu.cycle += 2; (ARR_u, Immediate)},
+
+        0xCB => {cpu.cycle += 2; (AXS_u, Immediate)},
+
+        0x93 => {cpu.cycle += 6; (AXA_u, AbsoluteIndexedY)},
+        0x9F => {cpu.cycle += 5; (AXA_u, IndirectIndexed)},
+
+        0x9B => {cpu.cycle += 5; (XAS_u, AbsoluteIndexedY)},
+
+        0x9C => {cpu.cycle += 5; (SYA_u, AbsoluteIndexedX)},
+
+        0x9E => {cpu.cycle += 5; (SXA_u, AbsoluteIndexedY)},
+
+        0xAB => {cpu.cycle += 2; (ATX_u, Immediate)},
+
+        0xBB => {cpu.cycle += 4; (LAR_u, AbsoluteIndexedY)},
+
+        // Apparently these codes just lock the processor requiring reboot
+        0x02 => panic!("KIL Opcode. Execution Halted"),
+        0x12 => panic!("KIL Opcode. Execution Halted"),
+        0x22 => panic!("KIL Opcode. Execution Halted"),
+        0x32 => panic!("KIL Opcode. Execution Halted"),
+        0x42 => panic!("KIL Opcode. Execution Halted"),
+        0x52 => panic!("KIL Opcode. Execution Halted"),
+        0x62 => panic!("KIL Opcode. Execution Halted"),
+        0x72 => panic!("KIL Opcode. Execution Halted"),
+        0x92 => panic!("KIL Opcode. Execution Halted"),
+        0xB2 => panic!("KIL Opcode. Execution Halted"),
+        0xD2 => panic!("KIL Opcode. Execution Halted"),
+        0xF2 => panic!("KIL Opcode. Execution Halted"),
+
+        // TODO: Implement this?
+        0x8B => panic!("XAA Opcode. Execution Unpredictable"),
         
-        _ => panic!("Unrecognized opcode: ${:02X} PC:${:04X}", op_code, cpu.pc)
+        _ => unreachable!()
     }
 }
 
@@ -419,14 +461,24 @@ pub fn execute(cpu: &mut Cpu,
 
         // Unofficial opcodes
         NOP_u => { cpu.NOP_u(); },
+        SBC_u => { cpu.SBC(mem, instr.1); },
         LAX_u => { cpu.LAX_u(mem, instr.1); },
         SAX_u => { cpu.SAX_u(mem, instr.1); },
-        SBC_u => { cpu.SBC(mem, instr.1); },
         DCP_u => { cpu.DCP_u(mem, instr.1); },
         ISC_u => { cpu.ISC_u(mem, instr.1); },
         SLO_u => { cpu.SLO_u(mem, instr.1); },
         RLA_u => { cpu.RLA_u(mem, instr.1); },
         SRE_u => { cpu.SRE_u(mem, instr.1); },
         RRA_u => { cpu.RRA_u(mem, instr.1); },
+        ALR_u => { cpu.ALR_u(mem, instr.1); },
+        ANC_u => { cpu.ANC_u(mem, instr.1); },
+        ARR_u => { cpu.ARR_u(mem, instr.1); },
+        AXS_u => { cpu.AXS_u(mem, instr.1); },
+        AXA_u => { cpu.AXA_u(mem, instr.1); },
+        XAS_u => { cpu.XAS_u(mem, instr.1); },
+        SYA_u => { cpu.SYA_u(mem, instr.1); },
+        SXA_u => { cpu.SXA_u(mem, instr.1); },
+        ATX_u => { cpu.ATX_u(mem, instr.1); },
+        LAR_u => { cpu.LAR_u(mem, instr.1); },
     }
 }
