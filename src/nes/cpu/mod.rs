@@ -9,6 +9,7 @@ use self::instructions::{Instruction, decode, execute, AddressingMode};
 use self::memory_map::{read_byte, write_byte, read_word};
 
 const NMI_VECTOR: u16 = 0xFFFA;
+const RESET_VECTOR: u16 = 0xFFFC;
 const BRK_IRQ_VECTOR: u16 = 0xFFFE;
 
 /// A *nearly* cycle-accurate representation of
@@ -102,6 +103,12 @@ impl Cpu {
             false => self.p & flag as u8 == 0,
         }
         
+    }
+
+    pub fn power_on_reset(&mut self, mem: &mut Memory) {
+        self.pc = read_word(mem, RESET_VECTOR);
+        self.sp -= 3;
+        self.set_flag(StatusFlag::IntDisable, true);
     }
 
     pub fn interrupt(&mut self, mem: &mut Memory, interrupt: Interrupt) {

@@ -53,7 +53,8 @@ impl<'a> Nes<'a> {
     }
 
     pub fn run(&mut self) {
-        self.mem.ppu.power_up();
+        self.cpu.power_on_reset(&mut self.mem);
+        self.mem.ppu.power_on_reset();
         while self.state == NesState::Running {
             self.cpu.step(&mut self.mem);
             let frame_start = time::Instant::now();

@@ -93,37 +93,88 @@ enum Write {
     Two,
 }
 
+#[derive(Default, Debug)]
+struct PpuCtrl(u8);
+#[derive(Default, Debug)]
+struct PpuMask(u8);
+
+#[derive(Default, Debug)]
+struct PpuStatus(u8);
+
+impl PpuStatus {
+    fn reset(&mut self) {
+        *self = PpuStatus(0b1010_0000)
+    }
+
+    fn read(&mut self) -> u8 {
+        let byte = self.0;
+        *self = PpuStatus(byte & 0x7F); // Turn off bit 7
+        byte
+    }
+}
+
+#[derive(Default, Debug)]
+struct OamAddr(u8);
+
+#[derive(Default, Debug)]
+struct OamData(u8);
+
+impl OamData {
+    fn read(&self) -> u8 {
+        // TODO: Read @oam addr then increment
+        0
+    }
+}
+
+#[derive(Default, Debug)]
+struct PpuScroll(u8);
+#[derive(Default, Debug)]
+struct PpuAddr(u8);
+
+#[derive(Default, Debug)]
+struct PpuData(u8);
+
+impl PpuData {
+    fn read(&self) -> u8 {
+        // TODO: Read @Vram addr then increment
+        0
+    }
+}
+
+#[derive(Default, Debug)]
+struct OamDma(u8);
+
 /// The NES Picture Processing Unit or PPU.
 pub struct Ppu<'a> {
     /*############################## Registers ###############################*/
     /// CPU:$2000.
     /// Contains a number of flags used in controlling the PPU.
-    ppu_ctrl: u8,
+    ppu_ctrl: PpuCtrl,
     /// CPU:$2001.
     /// Controls rendering of sprites and backgrounds as well as color effects.
-    ppu_mask: u8,
+    ppu_mask: PpuMask,
     /// CPU:$2002.
     /// Contains information regarding the state of the PPU.
-    ppu_status: u8,
+    ppu_status: PpuStatus,
     /// CPU:$2003.
     /// The address of OAM to access.
-    oam_addr: u8,
+    oam_addr: OamAddr,
     /// CPU:$2004.
     /// OAM data is written here.
-    oam_data: u8,
+    oam_data: OamData,
     /// CPU:$2005.
     /// Changes the scroll position.
-    ppu_scroll: u8,
+    ppu_scroll: PpuScroll,
     /// CPU:$2006.
     /// This is how the CPU interacts with PPU memory. CPU sets the address here.
-    ppu_addr: u8,
+    ppu_addr: PpuAddr,
     /// CPU:$2007.
     /// And reads/writes occur here.
-    ppu_data: u8,
+    ppu_data: PpuData,
 
     /// CPU:$4014.
     /// How large amounts of data are transferred quickly.
-    oam_dma: u8,
+    oam_dma: OamDma,
 
     // Using nomenclature from nesdev wiki
     /// 15 bits keeps track of the current VRAM address.
@@ -188,15 +239,15 @@ impl<'a> Ppu<'a> {
                -> Ppu<'a>
     {
         Ppu {
-            ppu_ctrl: 0,
-            ppu_mask: 0,
-            ppu_status: 0,
-            oam_addr: 0,
-            oam_data: 0,
-            ppu_scroll: 0,
-            ppu_addr: 0,
-            ppu_data: 0,
-            oam_dma: 0,
+            ppu_ctrl: PpuCtrl::default(),
+            ppu_mask: PpuMask::default(),
+            ppu_status: PpuStatus::default(),
+            oam_addr: OamAddr::default(),
+            oam_data: OamData::default(),
+            ppu_scroll: PpuScroll::default(),
+            ppu_addr: PpuAddr::default(),
+            ppu_data: PpuData::default(),
+            oam_dma: OamDma::default(),
 
             current_v_addr: 0,
             temp_v_addr: 0,
@@ -255,15 +306,25 @@ impl<'a> Ppu<'a> {
 
     /// Sets the vblank and sprite overflow bits of PPUSTATUS as this
     /// was commonly the state of the PPU after power on and warm up.
-    pub fn power_up(&mut self) {
-        self.ppu_status = 0b1010_0000;
+    pub fn power_on_reset(&mut self) {
+        self.ppu_status.reset();
     }
 }
 
 impl<'a> MemMapped for Ppu<'a> {
     fn read_byte(&mut self, addr: u16) -> u8 {
-        // TODO
-        0
+        match addr {
+            0x2000 => 0,
+            0x2001 => 0,
+            0x2002 => self.ppu_status.read(),
+            0x2003 => 0,
+            0x2004 => self.oam_data.read(),
+            0x2005 => 0,
+            0x2006 => 0,
+            0x2007 => self.ppu_data.read(),
+            0x4014 => 0,
+            _ => panic!("Invalid PPU read: {:04X}", addr),
+        }
     }
 
     fn write_byte(&mut self, addr: u16, val: u8) {
@@ -278,17 +339,17 @@ SCANLINE:{:?}    PPU CYC:{:5?}
 OAMADDR:{:02X} OAMDATA:{:02X} PPUSCROLL:{:02X}
 PPUADDR:{:02X} PPUDATA:{:02X} OAMDMA:   {:02X}
 T:{:04X} V:{:04X} X:{:03b} W:{:?}",
-               self.ppu_ctrl,
-               self.ppu_mask,
-               self.ppu_status,
+               self.ppu_ctrl.0,
+               self.ppu_mask.0,
+               self.ppu_status.0,
                self.scanline,
                self.cycle,
-               self.oam_addr,
-               self.oam_data,
-               self.ppu_scroll,
-               self.ppu_addr,
-               self.ppu_data,
-               self.oam_data,
+               self.oam_addr.0,
+               self.oam_data.0,
+               self.ppu_scroll.0,
+               self.ppu_addr.0,
+               self.ppu_data.0,
+               self.oam_data.0,
                self.temp_v_addr,
                self.current_v_addr,
                self.x_scroll_fine,
