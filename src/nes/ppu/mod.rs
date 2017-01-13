@@ -1,4 +1,5 @@
 //! This module provides an interface for the 6502 as used in the NES.
+
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -93,31 +94,56 @@ enum Write {
     Two,
 }
 
-#[derive(Default, Debug)]
-struct PpuCtrl(u8);
-#[derive(Default, Debug)]
-struct PpuMask(u8);
+bitflags! {
+    flags PpuCtrl: u8 {
+        const NT_BASE_ADDR     = 3,
+        const VRAM_INCREMENT   = (1 << 2),
+        const SPRT_TABLE_ADDR  = (1 << 3),
+        const BG_TABLE_ADDR    = (1 << 4),
+        const SPRT_SIZE        = (1 << 5),
+        const PPU_MAST_SLV_SEL = (1 << 6),
+        const NMI_GEN_ENABLE   = (1 << 7),
+    }
+}
 
-#[derive(Default, Debug)]
-struct PpuStatus(u8);
+bitflags! {
+    flags PpuMask: u8 {
+        const GRAYSCALE_ENABLE    = (1 << 0),
+        const SHOW_LEFT_BG_PXLS   = (1 << 1),
+        const SHOW_LEFT_SPRT_PXLS = (1 << 2),
+        const SHOW_BG             = (1 << 3),
+        const SHOW_SPRTS          = (1 << 4),
+        const EMPH_RED            = (1 << 5),
+        const EMPH_GREEEN         = (1 << 6),
+        const EMPH_BLUE           = (1 << 7),
+    }
+}
+
+bitflags! {
+    flags PpuStatus: u8 {
+        const SPRT_OVERFLOW  = (1 << 5),
+        const SPRT_0_HIT     = (1 << 6),
+        const VBLANK_STARTED = (1 << 7),
+    }
+}
 
 impl PpuStatus {
     fn reset(&mut self) {
-        *self = PpuStatus(0b1010_0000)
+        self.bits = 0b1010_0000;
     }
 
     fn read(&mut self) -> u8 {
-        let byte = self.0;
-        *self = PpuStatus(byte & 0x7F); // Turn off bit 7
+        let byte = self.bits;
+        self.bits = byte & 0x7F; // Turn off bit 7
         byte
     }
 }
 
 #[derive(Default, Debug)]
-struct OamAddr(u8);
+struct OamAddr{ addr: u8 }
 
 #[derive(Default, Debug)]
-struct OamData(u8);
+struct OamData{ data: u8 }
 
 impl OamData {
     fn read(&self) -> u8 {
@@ -127,12 +153,13 @@ impl OamData {
 }
 
 #[derive(Default, Debug)]
-struct PpuScroll(u8);
-#[derive(Default, Debug)]
-struct PpuAddr(u8);
+struct PpuScroll{ scroll: u8 }
 
 #[derive(Default, Debug)]
-struct PpuData(u8);
+struct PpuAddr{ addr: u8 }
+
+#[derive(Default, Debug)]
+struct PpuData{ data: u8 }
 
 impl PpuData {
     fn read(&self) -> u8 {
@@ -142,7 +169,7 @@ impl PpuData {
 }
 
 #[derive(Default, Debug)]
-struct OamDma(u8);
+struct OamDma{ data: u8 }
 
 /// The NES Picture Processing Unit or PPU.
 pub struct Ppu<'a> {
@@ -239,9 +266,9 @@ impl<'a> Ppu<'a> {
                -> Ppu<'a>
     {
         Ppu {
-            ppu_ctrl: PpuCtrl::default(),
-            ppu_mask: PpuMask::default(),
-            ppu_status: PpuStatus::default(),
+            ppu_ctrl: PpuCtrl::empty(),
+            ppu_mask: PpuMask::empty(),
+            ppu_status: PpuStatus::empty(),
             oam_addr: OamAddr::default(),
             oam_data: OamData::default(),
             ppu_scroll: PpuScroll::default(),
@@ -255,7 +282,7 @@ impl<'a> Ppu<'a> {
             write: Write::One,
 
             cycle: 0,
-            scanline: Scanline::Visible(0),
+            scanline: Scanline::PreRender,
             frame: [0; SCREEN_SIZE],
 
             memory_map: MemoryMap::new(mapper, mirroring),
@@ -269,23 +296,10 @@ impl<'a> Ppu<'a> {
     /// count meets or exceeds the cpu cycle count. The primary
     /// purpose of this function is to fill the frame buffer
     /// and generate an NMI when it enters VBLANK.
-    pub fn step(&mut self, cpu_cycle: u32) -> bool {
+    pub fn step(&mut self, nmi_occured: &mut bool) -> bool {
         #[cfg(feature="debug_ppu")]
         println!("{:?}", self);
-        let mut nmi = false;
-        while self.cycle < cpu_cycle {
-            use self::Scanline::*;
-            match self.scanline {
-                PreRender => { self.prerender(); },
-                Visible(line) => { self.scanline(line); },
-                PostRender => { self.postrender(); },
-                VBlank(0) => { nmi = self.vblank(); },
-                VBlank(_) => { self.cycle += CPU_CYCLES_PER_SCANLINE; },
-            };
-            self.scanline = self.scanline.next();
-        }
-        if nmi { self.cycle = 0; }
-        nmi
+        false
     }
 
     fn prerender(&mut self) {
@@ -339,17 +353,17 @@ SCANLINE:{:?}    PPU CYC:{:5?}
 OAMADDR:{:02X} OAMDATA:{:02X} PPUSCROLL:{:02X}
 PPUADDR:{:02X} PPUDATA:{:02X} OAMDMA:   {:02X}
 T:{:04X} V:{:04X} X:{:03b} W:{:?}",
-               self.ppu_ctrl.0,
-               self.ppu_mask.0,
-               self.ppu_status.0,
+               self.ppu_ctrl.bits,
+               self.ppu_mask.bits,
+               self.ppu_status.bits,
                self.scanline,
                self.cycle,
-               self.oam_addr.0,
-               self.oam_data.0,
-               self.ppu_scroll.0,
-               self.ppu_addr.0,
-               self.ppu_data.0,
-               self.oam_data.0,
+               self.oam_addr.addr,
+               self.oam_data.data,
+               self.ppu_scroll.scroll,
+               self.ppu_addr.addr,
+               self.ppu_data.data,
+               self.oam_data.data,
                self.temp_v_addr,
                self.current_v_addr,
                self.x_scroll_fine,

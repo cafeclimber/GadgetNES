@@ -12,13 +12,12 @@ const NMI_VECTOR: u16 = 0xFFFA;
 const RESET_VECTOR: u16 = 0xFFFC;
 const BRK_IRQ_VECTOR: u16 = 0xFFFE;
 
-/// A *nearly* cycle-accurate representation of
-/// the 6502 processor as used in the NES (ignores
-/// branch results and page boundary crossings in
-/// cycle calculations)
+/// A representation of the 6502 processor as used in the NES (ignores
+/// branch results and page boundary crossings in cycle calculations)
 ///
 /// The CPU also contains a memory_map struct which provides an interface
 /// For RAM, I/O, etc.
+#[derive(Default)]
 pub struct Cpu {
     pc: u16,
     sp: u8,
@@ -38,6 +37,7 @@ pub enum Interrupt {
 }
 
 /// Each of the flags in the status register.
+// TODO: bitflags crate?
 enum StatusFlag {
     Carry      = 1 << 0,
     Zero       = 1 << 1,
@@ -50,19 +50,6 @@ enum StatusFlag {
 }
 
 impl Cpu {
-    pub fn new() -> Cpu {
-        Cpu {
-            pc: 0x8000,
-            sp: 0xFD, // Top of stack starts at end of Page 1 of RAM
-            p: 0x24,
-            x: 0,
-            y: 0,
-            a: 0,
-
-            cycle: 0,
-        }
-    }
-
     /// Pushes `val` to stack.
     fn push_stack(&mut self, mem: &mut Memory, val: u8) {
         mem.write_ram_byte((self.sp as u16) + 0x100, val);
@@ -105,10 +92,11 @@ impl Cpu {
         
     }
 
+    // TODO: Power on vs reset
     pub fn power_on_reset(&mut self, mem: &mut Memory) {
         self.pc = read_word(mem, RESET_VECTOR);
-        self.sp -= 3;
-        self.set_flag(StatusFlag::IntDisable, true);
+        self.sp = 0xFD;
+        self.p = 0x34;
     }
 
     pub fn interrupt(&mut self, mem: &mut Memory, interrupt: Interrupt) {
@@ -153,13 +141,22 @@ impl Cpu {
     /// fetches the next instruction, decodes, then executes it.
     pub fn step(&mut self, mem: &mut Memory) {
         let op_code = read_byte(mem, self.pc);
+        self.cycle(mem);
         let (inst, addr_mode) = decode(self, op_code);
 
         #[cfg(feature="debug_cpu")]
-        debug_print(&self, op_code, inst, mem, addr_mode);
+        println!("{:04X} {:02X}\t{:?}\t{:>70?}", self.pc, op_code, inst, self);
+
+        // Ops take >= 2 cycles
+        if addr_mode == AddressingMode::Accumulator ||
+           addr_mode == AddressingMode::Implied    ||
+           addr_mode == AddressingMode::Immediate ||
+           addr_mode == AddressingMode::Relative
+        {
+                self.cycle(mem);
+        }
 
         execute(self, mem, (inst, addr_mode));
-
 
         if inst != Instruction::JMP &&
            inst != Instruction::JSR &&
@@ -170,13 +167,14 @@ impl Cpu {
         }
     }
 
+    fn cycle(&mut self, mem: &mut Memory) {
+        mem.step();
+        self.cycle += 1;
+    }
+
     /// Increments PC depending on the addressing mode. 
     fn bump_pc(&mut self, addr_mode: AddressingMode) {
-        let bump: u16 = match addr_mode {
-            // Jumps handled above, branches set own PC, so don't change
-            AddressingMode::Indirect => 0,
-            AddressingMode::Relative => 0, 
-
+        self.pc += match addr_mode {
             AddressingMode::Accumulator => 1,
             AddressingMode::Implied     => 1,
 
@@ -190,12 +188,12 @@ impl Cpu {
             AddressingMode::Absolute         => 3,
             AddressingMode::AbsoluteIndexedX => 3,
             AddressingMode::AbsoluteIndexedY => 3,
+            _ => 0,
         };
-        self.pc += bump;
     }
 
     /// Returns a byte from mapped memory.
-    pub fn fetch_byte(&self,
+    pub fn fetch_byte(&mut self,
                       mem: &mut Memory,
                       addr_mode: AddressingMode)
                       -> u8
@@ -238,48 +236,62 @@ impl Cpu {
     /// Panics on those modes which do not actually interact with memory, or
     /// those modes where this interaction is handled by the individual function.
     /// These are Implied, Indexed, and Relative modes.
-    pub fn get_addr(&self,
+    pub fn get_addr(&mut self,
                       mem: &mut Memory,
                       addr_mode: AddressingMode)
                       -> u16
     {
         match addr_mode {
             AddressingMode::ZeroPage => {
+                for _ in 0..2 { self.cycle(mem); }
                 read_byte(mem, self.pc + 1) as u16
             },
             AddressingMode::Absolute => {
+                for _ in 0..3 { self.cycle(mem); }
                 read_word(mem, self.pc + 1)
             },
             AddressingMode::IndexedIndirect => {
                 let operand = read_byte(mem, self.pc + 1);
                 let index = operand.wrapping_add(self.x);
                 // Deals with zero-page wrapping
+                for _ in 0..5 { self.cycle(mem); }
                 (read_byte(mem, index as u16) as u16) |
                 (read_byte(mem, index.wrapping_add(1) as u16) as u16) << 8
             },
             AddressingMode::IndirectIndexed => {
                 let operand = read_byte(mem, self.pc + 1);
                 // Deals with zero-page wrapping
+                for _ in 0..5 { self.cycle(mem); }
                 let addr = {
                     (read_byte(mem, operand as u16) as u16) |
                     (read_byte(mem, operand.wrapping_add(1) as u16) as u16) << 8
                 };
+                // Add one cycle if page boundary is crossed
+                if addr & 0xFF == 0xFF { self.cycle(mem); }
                 addr.wrapping_add(self.y as u16)
             },
             AddressingMode::ZeroPageIndexedX => {
+                for _ in 0..3 { self.cycle(mem); }
                 let addr = read_byte(mem, self.pc + 1);
                 addr.wrapping_add(self.x) as u16
             },
             AddressingMode::ZeroPageIndexedY => {
+                for _ in 0..3 { self.cycle(mem); }
                 let addr = read_byte(mem, self.pc + 1);
                 addr.wrapping_add(self.y) as u16
             },
             AddressingMode::AbsoluteIndexedX => {
+                for _ in 0..3 { self.cycle(mem); }
                 let addr = read_word(mem, self.pc + 1) as u16;
+                // Add one cycle if page boundary is crossed
+                if addr & 0xFF == 0xFF { self.cycle(mem); }
                 addr.wrapping_add(self.x as u16)
             },
             AddressingMode::AbsoluteIndexedY => {
+                for _ in 0..3 { self.cycle(mem); }
                 let addr = read_word(mem, self.pc + 1) as u16;
+                // Add one cycle if page boundary is crossed
+                if addr & 0xFF == 0xFF { self.cycle(mem); }
                 addr.wrapping_add(self.y as u16)
             },
             // Implied, Relative, Indexed
@@ -289,73 +301,6 @@ impl Cpu {
             }
         }
     }
-}
-
-
-#[cfg(feature="debug_cpu")]
-fn debug_print(cpu: &Cpu,
-               op_code: u8,
-               instr: Instruction,
-               mem: &mut Memory,
-               addr_mode: AddressingMode)
-{
-    print!("{:04X}  {:02X} {:?}",
-           cpu.pc,
-           op_code,
-           instr);
-
-    match addr_mode {
-        AddressingMode::Implied => {
-            print!("                                   ")
-        },
-        AddressingMode::Accumulator => {
-            print!(" A                                 ")
-        },
-        AddressingMode::Relative => {
-            print!(" BRANCH                            ")
-        },
-        AddressingMode::Absolute => {
-            print!(" ${:04X}                             ",
-                   cpu.get_addr(mem, addr_mode))
-        },
-        AddressingMode::AbsoluteIndexedX => {
-            print!(" ${:04X},X                           ",
-                   cpu.get_addr(mem, addr_mode))
-        },
-        AddressingMode::AbsoluteIndexedY => {
-            print!(" ${:04X},Y                           ",
-                   cpu.get_addr(mem, addr_mode))
-        },
-        AddressingMode::Immediate => {
-            print!(" #{:02X}                               ",
-                   cpu.fetch_byte(mem, addr_mode))
-        },
-        AddressingMode::Indirect => {
-            print!(" ($ADDR)                            ")
-        },
-        AddressingMode::IndexedIndirect => {
-            print!(" (${:02X},X)                           ",
-                   cpu.fetch_byte(mem, AddressingMode::Immediate))
-        },
-        AddressingMode::IndirectIndexed => {
-            print!(" (${:02X}),Y                         ",
-                   cpu.get_addr(mem, addr_mode))
-        },
-        AddressingMode::ZeroPage => {
-            print!(" ${:02X}                               ",
-                   cpu.get_addr(mem, addr_mode))
-        },
-        AddressingMode::ZeroPageIndexedX => {
-            print!(" ${:02X},X                             ",
-                   cpu.get_addr(mem, addr_mode))
-        },
-        AddressingMode::ZeroPageIndexedY => {
-            print!(" ${:02X},Y                             ",
-                   cpu.get_addr(mem, addr_mode))
-        },
-    }
-
-    println!("{:?}", cpu);
 }
 
 impl fmt::Debug for Cpu {

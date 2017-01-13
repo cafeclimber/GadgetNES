@@ -18,9 +18,13 @@ impl Cpu {
         let branch = self.check_flag(flag, branch_if_set);
         match branch {
             true => {
+                self.cycle(mem);
+                // Check if new page
+                if branch_target & 0xFF < self.pc { self.cycle(mem); }
                 self.pc = branch_target;
             }
             false => {
+                self.cycle(mem);
                 self.pc += 2;
             }
         }

@@ -45,6 +45,17 @@ impl<'a> Memory<'a> {
         }
     }
 
+    /// Steps the APU forward one step and the PPU forward three.
+    /// Returns whether or not an nmi occured in the PPU step
+    pub fn step(&mut self) -> bool {
+        // self.apu.step()
+        let mut nmi_occured = false;
+        for _ in 0..3 {
+            self.ppu.step(&mut nmi_occured);
+        }
+        nmi_occured
+    }
+
     pub fn read_ppu_byte(&mut self, addr: u16) -> u8 {
         self.ppu.read_byte(addr)
     }

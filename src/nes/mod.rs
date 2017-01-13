@@ -44,7 +44,7 @@ impl<'a> Nes<'a> {
     pub fn init(rom: &InesRom, sdl_context: &Sdl) -> Nes<'a> {
 
         Nes {
-            cpu: Cpu::new(),
+            cpu: Cpu::default(),
             mem: Memory::new(rom, sdl_context),
             state: NesState::Running,
 
@@ -57,28 +57,6 @@ impl<'a> Nes<'a> {
         self.mem.ppu.power_on_reset();
         while self.state == NesState::Running {
             self.cpu.step(&mut self.mem);
-            let frame_start = time::Instant::now();
-            let nmi = self.mem.ppu.step(self.cpu.cycle);
-            if nmi {
-                #[cfg(feature="debug_ppu")]
-                println!("###################################### VB\
-                          LANK ########################################");
-                self.cpu.interrupt(&mut self.mem, NMI);
-                self.cpu.cycle = 0;
-
-                let frame_duration = frame_start.elapsed();
-                let target_frame_duration = time::Duration::new(0,NS_PER_FRAME);
-                if frame_duration < target_frame_duration {
-                    let sleep_time = target_frame_duration - frame_duration;
-                    #[cfg(feature="debug_ppu")]
-                    println!("sleep_time: {:?}", sleep_time);
-                    sleep(sleep_time);
-                }
-            } else {
-                #[cfg(feature="debug_ppu")]
-                println!("###########################################\
-                          ###########################################");
-            }
 
             for event in self.event_pump.poll_iter() {
                 match event {

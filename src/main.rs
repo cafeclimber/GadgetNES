@@ -1,5 +1,6 @@
 extern crate sdl2;
-extern crate rand;
+#[macro_use]
+extern crate bitflags;
 
 use std::env;
 use self::nes::Nes;
