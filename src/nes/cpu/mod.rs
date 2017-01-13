@@ -50,6 +50,49 @@ enum StatusFlag {
 }
 
 impl Cpu {
+    // TODO: Power on vs reset
+    pub fn power_on_reset(&mut self, mem: &mut Memory) {
+        self.pc = 0x8000;
+        // self.pc = read_word(mem, RESET_VECTOR);
+        self.sp = 0xFD;
+        self.p = 0x34;
+    }
+
+    /// This is the primary operation of the CPU. It represents the
+    /// execution of one instruction. Essentially, this function
+    /// fetches the next instruction, decodes, then executes it.
+    pub fn step(&mut self, mem: &mut Memory) {
+        let op_code = read_byte(mem, self.pc);
+        self.cycle(mem);
+        let (inst, addr_mode) = decode(self, op_code);
+
+        #[cfg(feature="debug_cpu")]
+        println!("{:04X} {:02X}\t{:?}\t{:>70?} PPUCYCLE: {:?}",
+                 self.pc,
+                 op_code,
+                 inst,
+                 self
+                 mem.ppu.cycle);
+
+        // Ops take >= 2 cycles
+        if addr_mode == AddressingMode::Accumulator ||
+           addr_mode == AddressingMode::Implied    ||
+           addr_mode == AddressingMode::Immediate ||
+           addr_mode == AddressingMode::Relative
+        {
+                self.cycle(mem);
+        }
+
+        execute(self, mem, (inst, addr_mode));
+
+        if inst != Instruction::JMP &&
+           inst != Instruction::JSR &&
+           inst != Instruction::RTS &&
+           inst != Instruction::RTI
+        {
+            self.bump_pc(addr_mode); // Increment pc depending on addressing mode
+        }
+    }
     /// Pushes `val` to stack.
     fn push_stack(&mut self, mem: &mut Memory, val: u8) {
         mem.write_ram_byte((self.sp as u16) + 0x100, val);
@@ -92,14 +135,15 @@ impl Cpu {
         
     }
 
-    // TODO: Power on vs reset
-    pub fn power_on_reset(&mut self, mem: &mut Memory) {
-        self.pc = read_word(mem, RESET_VECTOR);
-        self.sp = 0xFD;
-        self.p = 0x34;
-    }
-
+    // See 6502.org/tutorials/interrupts.html
     pub fn interrupt(&mut self, mem: &mut Memory, interrupt: Interrupt) {
+        for _ in 0..2 { self.cycle(mem); } // Internal Operations
+        let addr_high = ((self.pc & 0b1111_1111_0000_0000) >> 8) as u8;
+        self.push_stack(mem, addr_high);
+        self.cycle(mem);
+        let addr_low = (self.pc & 0b1111_1111) as u8;
+        self.push_stack(mem, addr_low);
+        self.cycle(mem);
         let vector = match interrupt {
             Interrupt::BRK => {
                 // Check if IntDisable flag is set
@@ -107,6 +151,7 @@ impl Cpu {
                 self.set_flag(StatusFlag::Break, true);
                 let flags = self.p;
                 self.push_stack(mem, flags);
+                self.cycle(mem);
                 self.set_flag(StatusFlag::Break, false); 
                 BRK_IRQ_VECTOR
             },
@@ -116,56 +161,24 @@ impl Cpu {
                 self.set_flag(StatusFlag::Break, false);
                 let flags = self.p;
                 self.push_stack(mem, flags);
+                self.cycle(mem);
                 BRK_IRQ_VECTOR
             },
             Interrupt::NMI => {
                 self.set_flag(StatusFlag::Break, false);
                 let flags = self.p;
                 self.push_stack(mem, flags);
+                self.cycle(mem);
                 NMI_VECTOR
             },
         };
-        let addr_low = (self.pc & 0b1111_1111) as u8;
-        let addr_high = ((self.pc & 0b1111_1111_0000_0000) >> 8) as u8;
-        self.push_stack(mem, addr_high);
-        self.push_stack(mem, addr_low);
         self.pc = read_word(mem, vector);
         #[cfg(feature="debug_cpu")]
-        println!("\n!!!!!!!!!!!!!!!!!!!!!  Asserting {:?} interrupt with addr: {:#04X} !!!!!!!!!!!!!!!!!!!!!\n",
+        println!("\n!!!  Asserting {:?} interrupt with addr: {:#04X} !!!\n",
                  interrupt,
                  self.pc);
     }
 
-    /// This is the primary operation of the CPU. It represents the
-    /// execution of one instruction. Essentially, this function
-    /// fetches the next instruction, decodes, then executes it.
-    pub fn step(&mut self, mem: &mut Memory) {
-        let op_code = read_byte(mem, self.pc);
-        self.cycle(mem);
-        let (inst, addr_mode) = decode(self, op_code);
-
-        #[cfg(feature="debug_cpu")]
-        println!("{:04X} {:02X}\t{:?}\t{:>70?}", self.pc, op_code, inst, self);
-
-        // Ops take >= 2 cycles
-        if addr_mode == AddressingMode::Accumulator ||
-           addr_mode == AddressingMode::Implied    ||
-           addr_mode == AddressingMode::Immediate ||
-           addr_mode == AddressingMode::Relative
-        {
-                self.cycle(mem);
-        }
-
-        execute(self, mem, (inst, addr_mode));
-
-        if inst != Instruction::JMP &&
-           inst != Instruction::JSR &&
-           inst != Instruction::RTS &&
-           inst != Instruction::RTI
-        {
-            self.bump_pc(addr_mode); // Increment pc depending on addressing mode
-        }
-    }
 
     fn cycle(&mut self, mem: &mut Memory) {
         mem.step();

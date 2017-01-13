@@ -23,6 +23,7 @@ impl Cpu {
 
         self.push_stack(mem, addr_high);
         self.push_stack(mem, addr_low);
+        for _ in 0..5 { self.cycle(mem); }
 
         self.pc = jump_target;
     }
@@ -31,6 +32,7 @@ impl Cpu {
     pub fn JMP(&mut self, mem: &mut Memory, addr_mode: AddressingMode) {
         let jump_target = match addr_mode {
             AddressingMode::Absolute => {
+                for _ in 0..2 { self.cycle(mem); }
                 let val = read_word(mem, self.pc + 1);
                 val
             },
@@ -39,6 +41,7 @@ impl Cpu {
             // e.g. JMP($30FF) will get low byte from $30FF
             // and high byte from $3000 instead of $3100
             AddressingMode::Indirect => {
+                for _ in 0..4 { self.cycle(mem); }
                 let addr = read_word(mem, self.pc + 1);
                 let val = {
                     if addr & 0xFF == 0xFF {
@@ -67,6 +70,8 @@ impl Cpu {
         let addr_high = self.pop_stack(mem);
         let ret_addr = (addr_high as u16) << 8 | (addr_low as u16);
 
+        for _ in 0..6 { self.cycle(mem); }
+
         self.pc = ret_addr;
     }
 
@@ -76,6 +81,8 @@ impl Cpu {
         let addr_high = self.pop_stack(mem);
         
         let ret_addr = (addr_high as u16) << 8 | (addr_low as u16);
+
+        for _ in 0..6 { self.cycle(mem); }
         
         self.pc = ret_addr + 1;
     }
