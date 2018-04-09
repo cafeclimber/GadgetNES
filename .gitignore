@@ -1,5 +1,3 @@
-target
-*.org
-roms/
-Cargo.lock
-tests/
+/tests
+/target
+**/*.rs.bk

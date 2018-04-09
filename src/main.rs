@@ -1,31 +1,20 @@
-extern crate sdl2;
-#[macro_use]
-extern crate bitflags;
-
 use std::env;
-use self::nes::Nes;
+use std::path::Path;
 
-mod nes;
-mod ines;
-mod graphics;
-
-use self::ines::InesRom;
+mod rom;
 
 fn main() {
-    let rom_name = env::args().nth(1).unwrap();
-    #[cfg(not(feature="debug_cpu"))]
-    println!("Loading: {:?}", rom_name);
-    let rom = InesRom::new(rom_name);
-    #[cfg(not(feature="debug_cpu"))]
-    println!("{:?}", rom);
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 2 {
+        println!("Expected 1 parameter. Got {:}", args.len() - 1);
+        return;
+    }
 
-    assert_eq!(rom.header.magic_no,
-               *b"NES\x1a",
-               "ERROR: File is not a vaild iNES ROM");
-
-    let sdl_context = sdl2::init().unwrap();
-    
-    let mut nes = Nes::init(&rom, &sdl_context);
-
-    nes.run();
+    let rom_path = Path::new(&args[1]);
+    match rom::read_rom(rom_path) {
+        Ok(rom) => {
+            // TODO: Run emulator!
+        }
+        Err(e) => println!("{}", e),
+    }
 }
