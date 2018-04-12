@@ -23,10 +23,13 @@ pub fn read_rom(path: &Path) -> Result<Rom, &str> {
     let mut header_buf = vec![0; 16];
     header_buf.copy_from_slice(&file_buf[0..16]);
     let header = Header::new(header_buf)?;
+
     let mut prg_rom = vec![0; header.prg_size()];
     let offset = calc_prg_offset(&header);
     prg_rom.copy_from_slice(&file_buf[offset..header.prg_size() + offset]);
+
     let mut chr_rom = vec![0; header.chr_size()];
+
     if header.chr_size() != 0 {
         let offset = header.prg_size() + offset;
         chr_rom.copy_from_slice(&file_buf[offset..offset + header.chr_size()]);

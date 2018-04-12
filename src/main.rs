@@ -1,7 +1,15 @@
+#[macro_use]
+extern crate bitflags;
+
+mod cart;
+mod cpu;
+mod nes;
+mod rom;
+
+use cart::Cartridge;
+use nes::Nes;
 use std::env;
 use std::path::Path;
-
-mod rom;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -13,7 +21,10 @@ fn main() {
     let rom_path = Path::new(&args[1]);
     match rom::read_rom(rom_path) {
         Ok(rom) => {
-            // TODO: Run emulator!
+            let cart = Cartridge::new(rom);
+            let mut nes = Nes::new(&cart);
+            nes.reset();
+            nes.run();
         }
         Err(e) => println!("{}", e),
     }
