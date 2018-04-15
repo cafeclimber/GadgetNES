@@ -5,15 +5,15 @@ pub const KILOBYTE: usize = 1024;
 
 pub struct Nes<'a> {
     // apu: Apu
-    cpu: Cpu<'a>,
+    cpu: Cpu,
     // ppu: Ppu,
-    cart: &'a Cartridge,
+    cart: &'a mut Cartridge,
 }
 
 impl<'a> Nes<'a> {
-    pub fn new(cart: &'a Cartridge) -> Self {
+    pub fn new(cart: &'a mut Cartridge) -> Self {
         Nes {
-            cpu: Cpu::new(&cart),
+            cpu: Cpu::new(),
             cart: cart,
         }
     }
@@ -24,7 +24,7 @@ impl<'a> Nes<'a> {
 
     pub fn run(&mut self) {
         loop {
-            self.cpu.step();
+            self.cpu.step(&mut self.cart);
         }
     }
 }

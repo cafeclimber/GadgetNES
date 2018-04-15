@@ -21,8 +21,8 @@ fn main() {
     let rom_path = Path::new(&args[1]);
     match rom::read_rom(rom_path) {
         Ok(rom) => {
-            let cart = Cartridge::new(rom);
-            let mut nes = Nes::new(&cart);
+            let mut cart = Cartridge::new(rom);
+            let mut nes = Nes::new(&mut cart);
             nes.reset();
             nes.run();
         }
