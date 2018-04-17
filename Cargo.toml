@@ -5,3 +5,4 @@ authors = ["Ryan Campbell <rdcampbell@tamu.edu>"]
 
 [dependencies]
 bitflags = "1.0"
+nom="^3.2"

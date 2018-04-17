@@ -284,7 +284,13 @@ impl Cpu {
         self.load_next_byte_bump_pc(cart) as u16 | (self.load_next_byte_bump_pc(cart) as u16) << 8
     }
 
-    fn fetch_byte(&mut self, cart: &mut Cartridge, addr: u16) -> u8 {
+    // For use by debugger
+    pub fn pc(&self) -> u16 {
+        self.registers.pc
+    }
+
+    // Public for debugger
+    pub fn fetch_byte(&mut self, cart: &mut Cartridge, addr: u16) -> u8 {
         match addr {
             0x0...0x07FF => self.ram[addr as usize],
             0x0800...0x1FFF => self.ram[(addr % 0x0800) as usize],
