@@ -322,7 +322,7 @@ impl Cpu {
     }
 
     fn stack_push_byte(&mut self, val: u8) {
-        self.ram[self.registers.s as usize] = val;
+        self.ram[(self.registers.s as usize) + 0x100] = val;
         self.registers.s -= 1;
     }
 
@@ -335,7 +335,7 @@ impl Cpu {
 
     fn stack_pop_byte(&mut self) -> u8 {
         self.registers.s += 1;
-        let val = self.ram[self.registers.s as usize];
+        let val = self.ram[(self.registers.s as usize) + 0x100];
         val
     }
 
