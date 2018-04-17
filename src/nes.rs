@@ -5,11 +5,12 @@ use super::cpu::Cpu;
 
 pub const KILOBYTE: usize = 1024;
 
+// Fields are public for debugger
 pub struct Nes<'a> {
     // apu: Apu
-    cpu: Cpu,
+    pub cpu: Cpu,
     // ppu: Ppu,
-    cart: &'a mut Cartridge,
+    pub cart: &'a mut Cartridge,
 }
 
 impl<'a> Nes<'a> {
@@ -28,9 +29,9 @@ impl<'a> Nes<'a> {
         if let Some(bps) = breakpoints {
             loop {
                 if bps.values().any(|&bp| (bp as u16) == self.cpu.pc()) {
-                    println!("Encountered breakpoint");
+                    println!("Encountered breakpoint @ {:04X}", self.cpu.pc());
                     break;
-                }
+                };
                 self.step();
             }
         }
@@ -45,8 +46,4 @@ impl<'a> Nes<'a> {
         self.cpu.step(&mut self.cart);
     }
 
-    // TODO: Move this to debugger and make CPU public?
-    pub fn print(&mut self, addr: u16) {
-        println!("M[{:04X}] = {:X}", addr, self.cpu.fetch_byte(&mut self.cart, addr));
-    }
 }

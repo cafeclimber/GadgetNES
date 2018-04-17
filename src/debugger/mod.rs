@@ -8,7 +8,7 @@ use self::parser::Command;
 
 pub struct Debugger<'a> {
     nes: Nes<'a>,
-    breakpoints: HashMap<usize, usize>,
+    pub breakpoints: HashMap<usize, usize>,
 }
 
 impl<'a> Debugger<'a> {
@@ -33,11 +33,11 @@ impl<'a> Debugger<'a> {
             match command {
                 Ok(Command::Step(num_steps)) => self.step(num_steps),
                 Ok(Command::Run) => self.step_forever(),
-                Ok(Command::Breakpoint(addr)) => self.set_breakpoint(&mut next_key, addr),
+                Ok(Command::Breakpoint(addr)) => self.set_breakpoint(&mut next_key, addr as usize),
                 Ok(Command::ListBreakPoints) => self.list_breakpoints(),
-                Ok(Command::ClearBreakpoint(addr)) => println!("You wanna clear a breakpoint at ${:X}", addr),
-                Ok(Command::Print(addr)) => self.print(addr),
-                Ok(Command::PrintRange(low_addr, high_addr)) => self.print_range(low_addr, high_addr),
+                Ok(Command::ClearBreakpoint(num)) => self.clear_bp(&num),
+                Ok(Command::Print(addr)) => self.print(addr as usize),
+                Ok(Command::PrintRange(low_addr, high_addr)) => self.print_range(low_addr as usize, high_addr as usize),
                 Ok(Command::Help) => self.help(),
                 Ok(Command::Quit) => break,
                 Err(ref e) => println!("{}", e),
@@ -70,9 +70,13 @@ impl<'a> Debugger<'a> {
         }
     }
 
+    fn clear_bp(&mut self, key: &usize) {
+        self.breakpoints.remove(key);
+    }
+
     fn print(&mut self, addr: usize) {
         if addr <= 0xFFFF {
-            self.nes.print(addr as u16);
+            println!("M[${:04X}] = {:X}", addr, self.nes.cpu.fetch_byte(&mut self.nes.cart, addr as u16));
         } else {
             println!("Invalid address: ${:X}", addr);
         }
@@ -84,9 +88,12 @@ impl<'a> Debugger<'a> {
         } else if low_addr > high_addr {
             println!("Low address higher than high address: LOW: ${:X} HIGH: ${:X}", low_addr, high_addr);
         } else {
-            for addr in low_addr..high_addr {
-                self.nes.print(addr as u16);
+            for (i, addr) in (low_addr..high_addr).enumerate() {
+                if i % 16 == 0 { print!("\n${:04X}| ", addr); io::stdout().flush().unwrap(); }
+                print!("{:02X} ", self.nes.cpu.fetch_byte(&mut self.nes.cart, addr as u16));
             }
+            print!("\n");
+            io::stdout().flush().unwrap();
         }
     }
 

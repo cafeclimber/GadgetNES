@@ -1,17 +1,18 @@
 use std::borrow::Cow;
 use std::str::{self, FromStr};
+use std::num;
 
-use nom::{IResult, digit};
+use nom::{IResult, digit, is_hex_digit};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Command {
     Step(usize),
     Run,
-    Breakpoint(usize),
+    Breakpoint(u16),
     ListBreakPoints,
     ClearBreakpoint(usize),
-    Print(usize),
-    PrintRange(usize, usize),
+    Print(u16),
+    PrintRange(u16, u16),
     Help,
     Quit,
 }
@@ -27,14 +28,23 @@ impl FromStr for Command {
     }
 }
 
+fn from_hex(input: &[u8]) -> Result<u16, num::ParseIntError> {
+    let hex_string = str::from_utf8(input).unwrap_or("0");
+    u16::from_str_radix(hex_string, 16)
+}
+
+named!(hex_primary<&[u8], u16>,
+    map_res!(take_while!(is_hex_digit), from_hex)
+);
+
 // TODO: Allow commands to take hex prefixed with '$'
 named!(command<Command>,
     alt_complete!(
-        step        |
-        run         |
         breakpoint  |
         list        |
         clear_bp    |
+        step        |
+        run         |
         print       |
         print_range |
         help        |
@@ -55,7 +65,7 @@ named!(step<Command>,
 named!(run<Command>,
     do_parse!(
         alt!(
-            tag!("r") | tag!("run") | tag!("c") | tag!("continue")
+            tag!("r") | tag!("run")
         ) >>
         (Command::Run)
     )
@@ -66,7 +76,7 @@ named!(breakpoint<Command>,
         alt!(
             tag!("b") | tag!("break")
         ) >>
-        addr: ws!(usize_parser) >>
+        addr: ws!(hex_primary) >>
         (Command::Breakpoint(addr))
     )
 );
@@ -85,8 +95,8 @@ named!(clear_bp<Command>,
         alt!(
             tag!("cb") | tag!("clear")
         ) >>
-        addr: ws!(usize_parser) >>
-        (Command::ClearBreakpoint(addr))
+        num: ws!(usize_parser) >>
+        (Command::ClearBreakpoint(num))
     )
 );
 
@@ -95,7 +105,7 @@ named!(print<Command>,
         alt!(
             tag!("p") | tag!("print")
         ) >>
-        addr: ws!(usize_parser) >>
+        addr: ws!(hex_primary) >>
         (Command::Print(addr))
     )
 );
@@ -103,9 +113,9 @@ named!(print<Command>,
 named!(print_range<Command>,
     do_parse!(
         tag!("pr") >>
-        low_addr: ws!(usize_parser) >>
+        low_addr: ws!(hex_primary) >>
         alt!(char!(',') | char!(':')) >>
-        high_addr: ws!(usize_parser) >>
+        high_addr: ws!(hex_primary) >>
         (Command::PrintRange(low_addr, high_addr))
     )
 );
