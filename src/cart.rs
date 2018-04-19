@@ -71,7 +71,7 @@ impl Mapper for Mapper000 {
     fn prg_read(&self, addr: u16) -> u8 {
         if (addr >= 0x6000) & (addr < 0x7FFF) {
             self.prg_ram[(addr - 0x6000) as usize]
-        } else if (addr >= 0x8000) & (addr < 0xFFFF) {
+        } else if addr >= 0x8000 {
             self.prg_rom[(addr - 0x8000) as usize]
         } else {
             panic!("Unrecognized PRG address: {:#X}", addr);
@@ -81,7 +81,7 @@ impl Mapper for Mapper000 {
     fn prg_write(&mut self, addr: u16, val: u8) {
         if (addr >= 0x6000) & (addr < 0x7FFF) {
             self.prg_ram[(addr - 0x6000) as usize] = val;
-        } else if (addr >= 0x8000) & (addr < 0xBFFF) {
+        } else if addr >= 0x8000 {
             self.prg_rom[(addr - 0x8000) as usize] = val;
         } else {
             panic!("Unrecognized PRG address: {:#X}", addr);
