@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::nes::KILOBYTE;
 use super::rom::Rom;
 

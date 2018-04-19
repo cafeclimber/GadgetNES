@@ -46,35 +46,18 @@ trait AddressingMode {
     fn load(&self, cpu: &mut Cpu, cart: &mut Cartridge) -> u8;
     fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8);
 }
+
 struct AccumulatorAM;
 struct ImmediateAM;
-struct ZeroPageAM {
-    arg: u8,
-}
-struct AbsoluteAM {
-    arg: u16,
-}
-struct RelativeAM {
-    arg: u8,
-}
-struct ZeroPageIdxXAM {
-    arg: u8,
-}
-struct ZeroPageIdxYAM {
-    arg: u8,
-}
-struct AbsoluteIdxXAM {
-    arg: u16,
-}
-struct AbsoluteIdxYAM {
-    arg: u16,
-}
-struct IndexedIndirectAM {
-    arg: u8,
-}
-struct IndirectIndexedAM {
-    arg: u8,
-}
+struct ZeroPageAM { arg: u8, }
+struct AbsoluteAM { arg: u16, }
+struct RelativeAM { arg: u8, }
+struct ZeroPageIdxXAM { arg: u8, }
+struct ZeroPageIdxYAM { arg: u8, }
+struct AbsoluteIdxXAM { arg: u16, }
+struct AbsoluteIdxYAM { arg: u16, }
+struct IndexedIndirectAM { arg: u8, }
+struct IndirectIndexedAM { arg: u8, }
 
 impl AddressingMode for AccumulatorAM {
     fn init(_cpu: &mut Cpu, _cart: &mut Cartridge) -> Self {
@@ -85,6 +68,7 @@ impl AddressingMode for AccumulatorAM {
         print!("A{:27}{:?} CYC:{:}", " ", cpu.registers, cpu.cycles);
         cpu.registers.a
     }
+
     fn store(&self, cpu: &mut Cpu, _cart: &mut Cartridge, val: u8) {
         cpu.registers.a = val;
     }
@@ -100,6 +84,7 @@ impl AddressingMode for ImmediateAM {
         print!("#${:02X}{:24}{:?} CYC:{:}", ret, " ", cpu.registers, cpu.cycles);
         ret
     }
+
     fn store(&self, _cpu: &mut Cpu, _cart: &mut Cartridge, _val: u8) {
         panic!("Hah...no");
     }
@@ -121,6 +106,7 @@ impl AddressingMode for ZeroPageAM {
         print!("${:02X} = {:02X}{:20}{:?} CYC:{:}", self.arg as u8, val, " ", cpu.registers, cpu.cycles);
         val
     }
+
     fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
         let addr = self.arg as u16;
         print!("${:02X} = {:02X}{:20}{:?} CYC:{:}", addr as u8, cpu.fetch_byte(cart, addr), " ", cpu.registers, cpu.cycles);
@@ -138,6 +124,7 @@ impl AddressingMode for AbsoluteAM {
         print!("${:04X} = {:02X}{:18}{:?} CYC:{:}", addr, cpu.fetch_byte(cart, addr), " ", cpu.registers, cpu.cycles);
         cpu.fetch_byte(cart, self.arg)
     }
+
     fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
         let addr = self.arg;
         print!("${:04X} = {:02X}{:18}{:?} CYC:{:}", addr, cpu.fetch_byte(cart, addr), " ", cpu.registers, cpu.cycles);
@@ -156,6 +143,7 @@ impl AddressingMode for ZeroPageIdxXAM {
         print!("${:02X},X @ {:02X} = {:02X}{:13}{:?} CYC:{:}", self.arg, addr, val, " ", cpu.registers, cpu.cycles);
         val
     }
+
     fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
         let addr = self.arg.wrapping_add(cpu.registers.x);
         let existing_val = cpu.fetch_byte(cart, addr as u16);
@@ -175,6 +163,7 @@ impl AddressingMode for ZeroPageIdxYAM {
         print!("${:02X},Y @ {:02X} = {:02X}{:13}{:?} CYC:{:}", self.arg, addr, val, " ", cpu.registers, cpu.cycles);
         val
     }
+
     fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
         let addr = self.arg.wrapping_add(cpu.registers.y);
         let existing_val = cpu.fetch_byte(cart, addr as u16);
@@ -194,6 +183,7 @@ impl AddressingMode for AbsoluteIdxXAM {
         print!("${:04X},X @ {:04X} = {:02X}{:9}{:?} CYC:{:}", self.arg, addr, val, " ", cpu.registers, cpu.cycles);
         val
     }
+
     fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
         let addr = self.arg.wrapping_add(cpu.registers.x as u16);
         let existing_val = cpu.fetch_byte(cart, addr);
@@ -213,6 +203,7 @@ impl AddressingMode for AbsoluteIdxYAM {
         print!("${:04X},Y @ {:04X} = {:02X}{:9}{:?} CYC:{:}", self.arg, addr, val, " ", cpu.registers, cpu.cycles);
         val
     }
+
     fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
         let addr = self.arg.wrapping_add(cpu.registers.y as u16);
         let existing_val = cpu.fetch_byte(cart, addr);
@@ -238,6 +229,7 @@ impl AddressingMode for IndexedIndirectAM {
         print!("(${:02X},X) @ {:02X} = {:04X} = {:02X}{:4}{:?} CYC:{:}", self.arg, index, final_addr, val, " ", cpu.registers, cpu.cycles);
         val
     }
+
     fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
         let index = self.arg.wrapping_add(cpu.registers.x);
         // Handle page wrapping
@@ -270,6 +262,7 @@ impl AddressingMode for IndirectIndexedAM {
         print!("(${:02X}),Y = {:04X} @ {:04X} = {:02X}{:2}{:?} CYC:{:}", self.arg, addr, final_addr, val, " ", cpu.registers, cpu.cycles);
         val
     }
+
     fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
         let index = self.arg;
         // Check if it's on the page boundary...
@@ -297,7 +290,86 @@ impl Cpu {
     pub fn reset(&mut self) {
         self.registers.pc = 0xC000; // FIXME: This is only for running NESTEST
         self.registers.s = 0xFD;
-        self.registers.p = ProcessorFlags::from_bits(0x24).unwrap(); // TODO: ...unwrap?
+        self.registers.p = ProcessorFlags::from_bits(0x24).unwrap();
+    }
+
+    fn load_next_byte_bump_pc(&mut self, cart: &mut Cartridge) -> u8 {
+        let pc = self.registers.pc;
+        self.registers.pc += 1;
+        self.fetch_byte(cart, pc)
+    }
+
+    fn load_next_word_bump_pc(&mut self, cart: &mut Cartridge) -> u16 {
+        self.load_next_byte_bump_pc(cart) as u16 | (self.load_next_byte_bump_pc(cart) as u16) << 8
+    }
+
+    // For use by debugger
+    pub fn pc(&self) -> u16 {
+        self.registers.pc
+    }
+
+    // Public for debugger
+    pub fn fetch_byte(&mut self, cart: &mut Cartridge, addr: u16) -> u8 {
+        match addr {
+            0x0...0x07FF => self.ram[addr as usize],
+            0x0800...0x1FFF => self.ram[(addr % 0x0800) as usize],
+            0x2000...0x2007 => unimplemented!(), // PPU registers
+            0x2008...0x3FFF => unimplemented!(), // PPU register mirrors
+            0x4000...0x4017 => unimplemented!(), // APU registers
+            0x4018...0x401F => panic!("These registers are disabled during normal operation"),
+            0x4020...0xFFFF => cart.prg_read(addr),
+            _ => unreachable!(),
+        }
+    }
+
+    fn fetch_word(&mut self, cart: &mut Cartridge, addr: u16) -> u16 {
+        // The 6502 is little endian (LSB first)
+        ((self.fetch_byte(cart, addr + 1) as u16) << 8) | self.fetch_byte(cart, addr) as u16
+    }
+
+    fn store(&mut self, cart: &mut Cartridge, addr: u16, val: u8) {
+        match addr {
+            0x0...0x07FF => self.ram[addr as usize] = val,
+            0x0800...0x1FFF => self.ram[(addr % 0x0800) as usize] = val,
+            0x2000...0x2007 => unimplemented!(), // PPU registers
+            0x2008...0x3FFF => unimplemented!(), // PPU register mirrors
+            0x4000...0x4017 => unimplemented!(), // APU registers
+            0x4018...0x401F => panic!("These registers are disabled during normal operation"),
+            0x4020...0xFFFF => cart.prg_write(addr, val),
+            _ => unreachable!(),
+        }
+    }
+
+    fn stack_push_byte(&mut self, val: u8) {
+        self.ram[(self.registers.s as usize) + 0x100] = val;
+        self.registers.s -= 1;
+    }
+
+    fn stack_push_word(&mut self, val: u16) {
+        let high_byte = ((val >> 8) & 0xFF) as u8;
+        let low_byte = (val & 0xFF) as u8;
+        self.stack_push_byte(high_byte);
+        self.stack_push_byte(low_byte);
+    }
+
+    fn stack_pop_byte(&mut self) -> u8 {
+        self.registers.s += 1;
+        let val = self.ram[(self.registers.s as usize) + 0x100];
+        val
+    }
+
+    fn stack_pop_word(&mut self) -> u16 {
+        let low_byte = self.stack_pop_byte();
+        let high_byte = self.stack_pop_byte();
+        ((high_byte as u16) << 8) | (low_byte as u16)
+    }
+
+    fn branch(&mut self, am: RelativeAM, flag: ProcessorFlags, set: bool, branch_type: &str) {
+        let offset_addr = self.registers.pc.wrapping_add((am.arg as i8) as u16);
+        print!(" {:} ${:4X}{:23}{:?} CYC:{:}", branch_type, offset_addr, " ", self.registers, self.cycles);
+        if set == self.registers.p.contains(flag) {
+            self.registers.pc = offset_addr;
+        }
     }
 
     pub fn step(&mut self, cart: &mut Cartridge) {
@@ -314,22 +386,6 @@ impl Cpu {
             0xB0 => { let am = RelativeAM::init(self, cart); self.bcs(am); }
             0xD0 => { let am = RelativeAM::init(self, cart); self.bne(am); }
             0xF0 => { let am = RelativeAM::init(self, cart); self.beq(am); }
-
-            // Flag sets
-            0x38 => { self.sec(); }
-            0x78 => { self.sei(); }
-            0xF8 => { self.sed(); }
-
-            // Flag clears
-            0x18 => { self.clc(); }
-            0xB8 => { self.clv(); }
-            0xD8 => { self.cld(); }
-
-            // Stack
-            0x08 => { self.php(); }
-            0x28 => { self.plp(); }
-            0x48 => { self.pha(); }
-            0x68 => { self.pla(); }
 
             // ALU operations
             0x61 => { let am = IndexedIndirectAM::init(self, cart); self.adc(cart, am); }
@@ -436,14 +492,6 @@ impl Cpu {
             0xCA => { self.dex(); }
             0x88 => { self.dey(); }
 
-            // Transfers
-            0xAA => { self.tax(); }
-            0xA8 => { self.tay(); }
-            0xBA => { self.tsx(); }
-            0x8A => { self.txa(); }
-            0x9A => { self.txs(); }
-            0x98 => { self.tya(); }
-
             // Loads
             0xA1 => { let am = IndexedIndirectAM::init(self, cart); self.lda(cart, am); }
             0xA5 => { let am = ZeroPageAM::init(self, cart); self.lda(cart, am); }
@@ -483,6 +531,30 @@ impl Cpu {
             0x8C => { let am = AbsoluteAM::init(self, cart); self.sty(cart, am); }
             0x94 => { let am = ZeroPageIdxXAM::init(self, cart); self.sty(cart, am); }
 
+            // Flag sets
+            0x38 => { self.sec(); }
+            0x78 => { self.sei(); }
+            0xF8 => { self.sed(); }
+
+            // Flag clears
+            0x18 => { self.clc(); }
+            0xB8 => { self.clv(); }
+            0xD8 => { self.cld(); }
+
+            // Stack
+            0x08 => { self.php(); }
+            0x28 => { self.plp(); }
+            0x48 => { self.pha(); }
+            0x68 => { self.pla(); }
+
+            // Transfers
+            0xAA => { self.tax(); }
+            0xA8 => { self.tay(); }
+            0xBA => { self.tsx(); }
+            0x8A => { self.txa(); }
+            0x9A => { self.txs(); }
+            0x98 => { self.tya(); }
+
             // Jumps
             0x4C => self.jmp_absolute(cart),
             0x6C => self.jmp_indirect(cart),
@@ -494,94 +566,6 @@ impl Cpu {
             _ => panic!("Unrecognized opcode: {:#X}", opcode),
         };
         println!("");
-    }
-
-    fn load_next_byte_bump_pc(&mut self, cart: &mut Cartridge) -> u8 {
-        let pc = self.registers.pc;
-        self.registers.pc += 1;
-        self.fetch_byte(cart, pc)
-    }
-
-    fn load_next_word_bump_pc(&mut self, cart: &mut Cartridge) -> u16 {
-        self.load_next_byte_bump_pc(cart) as u16 | (self.load_next_byte_bump_pc(cart) as u16) << 8
-    }
-
-    // For use by debugger
-    pub fn pc(&self) -> u16 {
-        self.registers.pc
-    }
-
-    // Public for debugger
-    pub fn fetch_byte(&mut self, cart: &mut Cartridge, addr: u16) -> u8 {
-        match addr {
-            0x0...0x07FF => self.ram[addr as usize],
-            0x0800...0x1FFF => self.ram[(addr % 0x0800) as usize],
-            0x2000...0x2007 => unimplemented!(), // PPU registers
-            0x2008...0x3FFF => unimplemented!(), // PPU register mirrors
-            0x4000...0x4017 => unimplemented!(), // APU registers
-            0x4018...0x401F => panic!("These registers are disabled during normal operation"),
-            0x4020...0xFFFF => cart.prg_read(addr),
-            _ => unreachable!(),
-        }
-    }
-
-    fn fetch_word(&mut self, cart: &mut Cartridge, addr: u16) -> u16 {
-        // The 6502 is little endian (LSB first)
-        ((self.fetch_byte(cart, addr + 1) as u16) << 8) | self.fetch_byte(cart, addr) as u16
-    }
-
-    fn store(&mut self, cart: &mut Cartridge, addr: u16, val: u8) {
-        match addr {
-            0x0...0x07FF => self.ram[addr as usize] = val,
-            0x0800...0x1FFF => self.ram[(addr % 0x0800) as usize] = val,
-            0x2000...0x2007 => unimplemented!(), // PPU registers
-            0x2008...0x3FFF => unimplemented!(), // PPU register mirrors
-            0x4000...0x4017 => unimplemented!(), // APU registers
-            0x4018...0x401F => panic!("These registers are disabled during normal operation"),
-            0x4020...0xFFFF => cart.prg_write(addr, val),
-            _ => unreachable!(),
-        }
-    }
-
-    fn stack_push_byte(&mut self, val: u8) {
-        self.ram[(self.registers.s as usize) + 0x100] = val;
-        self.registers.s -= 1;
-    }
-
-    fn stack_push_word(&mut self, val: u16) {
-        let high_byte = ((val >> 8) & 0xFF) as u8;
-        let low_byte = (val & 0xFF) as u8;
-        self.stack_push_byte(high_byte);
-        self.stack_push_byte(low_byte);
-    }
-
-    fn stack_pop_byte(&mut self) -> u8 {
-        self.registers.s += 1;
-        let val = self.ram[(self.registers.s as usize) + 0x100];
-        val
-    }
-
-    fn stack_pop_word(&mut self) -> u16 {
-        let low_byte = self.stack_pop_byte();
-        let high_byte = self.stack_pop_byte();
-        ((high_byte as u16) << 8) | (low_byte as u16)
-    }
-
-    fn branch(&mut self, am: RelativeAM, flag: ProcessorFlags, set: bool, branch_type: &str) {
-        let offset_addr = self.registers.pc.wrapping_add((am.arg as i8) as u16);
-        print!(" {:} ${:4X}{:23}{:?} CYC:{:}", branch_type, offset_addr, " ", self.registers, self.cycles);
-        match set {
-            true => {
-                if self.registers.p.contains(flag) {
-                    self.registers.pc = offset_addr;
-                }
-            }
-            false => {
-                if !self.registers.p.contains(flag) {
-                    self.registers.pc = offset_addr;
-                }
-            }
-        }
     }
 
     // INSTRUCTIONS
@@ -695,31 +679,31 @@ impl Cpu {
         self.registers.p.set(ProcessorFlags::NEGATIVE, m & (1 << 7) != 0);
     }
 
+    fn compare(&mut self, lhs: u8, rhs: u8) {
+        self.registers.p.set(ProcessorFlags::CARRY, lhs >= rhs);
+        self.registers.p.set(ProcessorFlags::ZERO, lhs == rhs);
+        self.registers.p.set(ProcessorFlags::NEGATIVE, lhs.wrapping_sub(rhs) & (1 << 7) != 0);
+    }
+
     fn cmp<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
         print!(" CMP ");
         let a = self.registers.a;
         let m = am.load(self, cart);
-        self.registers.p.set(ProcessorFlags::CARRY, a >= m);
-        self.registers.p.set(ProcessorFlags::ZERO, a == m);
-        self.registers.p.set(ProcessorFlags::NEGATIVE, a.wrapping_sub(m) & (1 << 7) != 0);
+        self.compare(a, m);
     }
 
     fn cpx<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
         print!(" CPX ");
         let x = self.registers.x;
         let m = am.load(self, cart);
-        self.registers.p.set(ProcessorFlags::CARRY, x >= m);
-        self.registers.p.set(ProcessorFlags::ZERO, x == m);
-        self.registers.p.set(ProcessorFlags::NEGATIVE, x.wrapping_sub(m) & (1 << 7) != 0);
+        self.compare(x, m);
     }
 
     fn cpy<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
         print!(" CPY ");
         let y = self.registers.y;
         let m = am.load(self, cart);
-        self.registers.p.set(ProcessorFlags::CARRY, y >= m);
-        self.registers.p.set(ProcessorFlags::ZERO, y == m);
-        self.registers.p.set(ProcessorFlags::NEGATIVE, y.wrapping_sub(m) & (1 << 7) != 0);
+        self.compare(y, m);
     }
 
     fn eor<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {

@@ -1,4 +1,5 @@
 //! Provides an abstraction for iNES Rom format
+#![allow(dead_code)]
 
 use std::fs::File;
 use std::io::prelude::*;
