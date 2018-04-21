@@ -42,8 +42,9 @@ impl<'a> Nes<'a> {
         }
     }
 
-    pub fn step(&mut self) {
-        self.cpu.step(&mut self.cart);
+    pub fn step(&mut self) -> (u8) {
+        let opcode = self.cpu.step(&mut self.cart);
+        (opcode)
     }
 
 }
