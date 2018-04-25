@@ -7,7 +7,7 @@ Running
     git clone
     cd GadgetNES
     cargo build
-    ./target/debug/gadget_nes /path/to/rom
+    cargo run -- -r /path/to/rom
 
 Contributing
 ------------
