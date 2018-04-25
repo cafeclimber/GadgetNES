@@ -3,20 +3,29 @@ extern crate bitflags;
 #[macro_use]
 extern crate nom;
 extern crate clap;
-
-mod cart;
-mod cpu;
-mod nes;
-mod rom;
-mod debugger;
+extern crate sdl2;
 
 use std::path::Path;
 
 use clap::{Arg, App};
 
+use sdl2::pixels::PixelFormatEnum::RGB24;
+use sdl2::render::{Texture, TextureCreator};
+
+mod cart;
+mod cpu;
+mod debugger;
+mod interconnect;
+mod nes;
+mod ppu;
+mod rom;
+mod screen;
+
 use cart::Cartridge;
 use debugger::Debugger;
 use nes::Nes;
+use screen::Screen;
+use screen::{NES_WIDTH, NES_HEIGHT};
 
 fn main() {
     let matches = App::new("GadgetNES")
@@ -40,7 +49,22 @@ fn main() {
     match rom::read_rom(rom_path) {
         Ok(rom) => {
             let mut cart = Cartridge::new(rom);
-            let mut nes = Nes::new(&mut cart);
+            let mut sdl = sdl2::init().unwrap();
+
+            // Setup SDL here because the lifetime crap for lib is ridiculous
+            let video_subsystem = sdl.video().unwrap();
+            let window = video_subsystem.window("GadgetNES", NES_WIDTH, NES_HEIGHT)
+                .position_centered()
+                .build()
+                .unwrap();
+
+            let canvas = window.into_canvas().build().unwrap();
+            let texture_creator = canvas.texture_creator();
+
+            let mut screen = Screen::new(canvas, &texture_creator);
+
+            let mut nes = Nes::new(&mut cart, screen);
+
             if matches.is_present("DEBUGGER") {
                 let mut debugger = Debugger::init(nes);
                 debugger.run();

@@ -1,8 +1,9 @@
-// TODO: Once finished implemeting all the unofficial ops, fix what was required for nestest logging
 use std::fmt;
 
-use super::cart::Cartridge;
+use super::interconnect::Interconnect;
 use super::nes::KILOBYTE;
+
+const RESET_VECTOR: u16 = 0xFFFC;
 
 pub struct Cpu {
     registers: Registers,
@@ -21,13 +22,6 @@ struct Registers {
     pc: u16,
 }
 
-impl fmt::Debug for Registers {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
-               self.a, self.x, self.y, self.p, self.s)
-    }
-}
-
 bitflags! {
     #[derive(Default)]
     struct ProcessorFlags: u8 {
@@ -43,9 +37,9 @@ bitflags! {
 }
 
 trait AddressingMode {
-    fn init(_cpu: &mut Cpu, _cart: &mut Cartridge) -> Self;
-    fn load(&self, cpu: &mut Cpu, cart: &mut Cartridge) -> u8;
-    fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8);
+    fn init(_cpu: &mut Cpu, _interconnect: &mut Interconnect) -> Self;
+    fn load(&self, cpu: &mut Cpu, interconnect: &mut Interconnect) -> u8;
+    fn store(&self, cpu: &mut Cpu, interconnect: &mut Interconnect, val: u8);
 }
 
 struct AccumulatorAM;
@@ -57,191 +51,165 @@ struct ZeroPageIdxXAM { arg: u8, }
 struct ZeroPageIdxYAM { arg: u8, }
 struct AbsoluteIdxXAM { arg: u16, }
 struct AbsoluteIdxYAM { arg: u16, }
-struct IndexedIndirectAM { arg: u8, }
-struct IndirectIndexedAM { arg: u8, }
+struct IndexedIndirectAM { addr: u16, }
+struct IndirectIndexedAM { addr: u16, }
 
 impl AddressingMode for AccumulatorAM {
-    fn init(_cpu: &mut Cpu, _cart: &mut Cartridge) -> Self {
+    fn init(_cpu: &mut Cpu, _interconnect: &mut Interconnect) -> Self {
         AccumulatorAM
     }
 
-    fn load(&self, cpu: &mut Cpu, _cart: &mut Cartridge) -> u8 {
+    fn load(&self, cpu: &mut Cpu, _interconnect: &mut Interconnect) -> u8 {
         cpu.registers.a
     }
 
-    fn store(&self, cpu: &mut Cpu, _cart: &mut Cartridge, val: u8) {
+    fn store(&self, cpu: &mut Cpu, _interconnect: &mut Interconnect, val: u8) {
         cpu.registers.a = val;
     }
 }
 
 impl AddressingMode for ImmediateAM {
-    fn init(cpu: &mut Cpu, cart: &mut Cartridge) -> Self {
-        let val = cpu.load_next_byte_bump_pc(cart);
+    fn init(cpu: &mut Cpu, interconnect: &mut Interconnect) -> Self {
+        let val = cpu.load_next_byte_bump_pc(interconnect);
         ImmediateAM { val: val }
     }
 
-    fn load(&self, _cpu: &mut Cpu, _cart: &mut Cartridge) -> u8 {
+    fn load(&self, _cpu: &mut Cpu, _interconnect: &mut Interconnect) -> u8 {
         self.val
     }
 
-    fn store(&self, _cpu: &mut Cpu, _cart: &mut Cartridge, _val: u8) {
+    fn store(&self, _cpu: &mut Cpu, _interconnect: &mut Interconnect, _val: u8) {
         panic!("Hah...no");
     }
 }
 
 impl RelativeAM {
-    fn init(cpu: &mut Cpu, cart: &mut Cartridge) -> Self {
-        RelativeAM{ arg: cpu.load_next_byte_bump_pc(cart) }
+    fn init(cpu: &mut Cpu, interconnect: &mut Interconnect) -> Self {
+        RelativeAM{ arg: cpu.load_next_byte_bump_pc(interconnect) }
     }
 }
 
 impl AddressingMode for ZeroPageAM {
-    fn init(cpu: &mut Cpu, cart: &mut Cartridge) -> Self {
-        ZeroPageAM { arg: cpu.load_next_byte_bump_pc(cart) }
+    fn init(cpu: &mut Cpu, interconnect: &mut Interconnect) -> Self {
+        ZeroPageAM { arg: cpu.load_next_byte_bump_pc(interconnect) }
     }
 
-    fn load(&self, cpu: &mut Cpu, cart: &mut Cartridge) -> u8 {
-        cpu.fetch_byte(cart, self.arg as u16)
+    fn load(&self, cpu: &mut Cpu, interconnect: &mut Interconnect) -> u8 {
+        cpu.fetch_byte(interconnect, self.arg as u16)
     }
 
-    fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
-        cpu.store(cart, self.arg as u16, val);
+    fn store(&self, cpu: &mut Cpu, interconnect: &mut Interconnect, val: u8) {
+        cpu.store(interconnect, self.arg as u16, val);
     }
 }
 
 impl AddressingMode for AbsoluteAM {
-    fn init(cpu: &mut Cpu, cart: &mut Cartridge) -> Self {
-        AbsoluteAM { arg: cpu.load_next_word_bump_pc(cart) }
+    fn init(cpu: &mut Cpu, interconnect: &mut Interconnect) -> Self {
+        AbsoluteAM { arg: cpu.load_next_word_bump_pc(interconnect) }
     }
 
-    fn load(&self, cpu: &mut Cpu, cart: &mut Cartridge) -> u8 {
-        cpu.fetch_byte(cart, self.arg)
+    fn load(&self, cpu: &mut Cpu, interconnect: &mut Interconnect) -> u8 {
+        cpu.fetch_byte(interconnect, self.arg)
     }
 
-    fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
-        cpu.store(cart, self.arg, val);
+    fn store(&self, cpu: &mut Cpu, interconnect: &mut Interconnect, val: u8) {
+        cpu.store(interconnect, self.arg, val);
     }
 }
 
 impl AddressingMode for ZeroPageIdxXAM {
-    fn init(cpu: &mut Cpu, cart: &mut Cartridge) -> Self {
-        ZeroPageIdxXAM{ arg: cpu.load_next_byte_bump_pc(cart) }
+    fn init(cpu: &mut Cpu, interconnect: &mut Interconnect) -> Self {
+        ZeroPageIdxXAM{ arg: cpu.load_next_byte_bump_pc(interconnect) }
     }
 
-    fn load(&self, cpu: &mut Cpu, cart: &mut Cartridge) -> u8 {
+    fn load(&self, cpu: &mut Cpu, interconnect: &mut Interconnect) -> u8 {
         let x = cpu.registers.x;
-        cpu.fetch_byte(cart, self.arg.wrapping_add(x) as u16)
+        cpu.fetch_byte(interconnect, self.arg.wrapping_add(x) as u16)
     }
 
-    fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
+    fn store(&self, cpu: &mut Cpu, interconnect: &mut Interconnect, val: u8) {
         let x = cpu.registers.x;
-        cpu.store(cart, self.arg.wrapping_add(x) as u16, val);
+        cpu.store(interconnect, self.arg.wrapping_add(x) as u16, val);
     }
 }
 
 impl AddressingMode for ZeroPageIdxYAM {
-    fn init(cpu: &mut Cpu, cart: &mut Cartridge) -> Self {
-        ZeroPageIdxYAM { arg: cpu.load_next_byte_bump_pc(cart) }
+    fn init(cpu: &mut Cpu, interconnect: &mut Interconnect) -> Self {
+        ZeroPageIdxYAM { arg: cpu.load_next_byte_bump_pc(interconnect) }
     }
 
-    fn load(&self, cpu: &mut Cpu, cart: &mut Cartridge) -> u8 {
+    fn load(&self, cpu: &mut Cpu, interconnect: &mut Interconnect) -> u8 {
         let y = cpu.registers.y;
-        cpu.fetch_byte(cart, self.arg.wrapping_add(y) as u16)
+        cpu.fetch_byte(interconnect, self.arg.wrapping_add(y) as u16)
     }
 
-    fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
+    fn store(&self, cpu: &mut Cpu, interconnect: &mut Interconnect, val: u8) {
         let y = cpu.registers.y;
-        cpu.store(cart, self.arg.wrapping_add(y) as u16, val);
+        cpu.store(interconnect, self.arg.wrapping_add(y) as u16, val);
     }
 }
 
 impl AddressingMode for AbsoluteIdxXAM {
-    fn init(cpu: &mut Cpu, cart: &mut Cartridge) -> Self {
-        AbsoluteIdxXAM { arg: cpu.load_next_word_bump_pc(cart) }
+    fn init(cpu: &mut Cpu, interconnect: &mut Interconnect) -> Self {
+        AbsoluteIdxXAM { arg: cpu.load_next_word_bump_pc(interconnect) }
     }
 
-    fn load(&self, cpu: &mut Cpu, cart: &mut Cartridge) -> u8 {
+    fn load(&self, cpu: &mut Cpu, interconnect: &mut Interconnect) -> u8 {
         let x = cpu.registers.x as u16;
-        cpu.fetch_byte(cart, self.arg.wrapping_add(x))
+        cpu.fetch_byte(interconnect, self.arg.wrapping_add(x))
     }
 
-    fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
+    fn store(&self, cpu: &mut Cpu, interconnect: &mut Interconnect, val: u8) {
         let x = cpu.registers.x as u16;
-        cpu.store(cart, self.arg.wrapping_add(x), val);
+        cpu.store(interconnect, self.arg.wrapping_add(x), val);
     }
 }
 
 impl AddressingMode for AbsoluteIdxYAM {
-    fn init(cpu: &mut Cpu, cart: &mut Cartridge) -> Self {
-        AbsoluteIdxYAM{ arg: cpu.load_next_word_bump_pc(cart) }
+    fn init(cpu: &mut Cpu, interconnect: &mut Interconnect) -> Self {
+        AbsoluteIdxYAM{ arg: cpu.load_next_word_bump_pc(interconnect) }
     }
 
-    fn load(&self, cpu: &mut Cpu, cart: &mut Cartridge) -> u8 {
+    fn load(&self, cpu: &mut Cpu, interconnect: &mut Interconnect) -> u8 {
         let y = cpu.registers.y as u16;
-        cpu.fetch_byte(cart, self.arg.wrapping_add(y))
+        cpu.fetch_byte(interconnect, self.arg.wrapping_add(y))
     }
 
-    fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
+    fn store(&self, cpu: &mut Cpu, interconnect: &mut Interconnect, val: u8) {
         let y = cpu.registers.y as u16;
-        cpu.store(cart, self.arg.wrapping_add(y), val);
+        cpu.store(interconnect, self.arg.wrapping_add(y), val);
     }
 }
 
 impl AddressingMode for IndexedIndirectAM {
-    fn init(cpu: &mut Cpu, cart: &mut Cartridge) -> Self {
-        IndexedIndirectAM{ arg: cpu.load_next_byte_bump_pc(cart) }
+    fn init(cpu: &mut Cpu, interconnect: &mut Interconnect) -> Self {
+        let index = cpu.load_next_byte_bump_pc(interconnect).wrapping_add(cpu.registers.x);
+        let addr = cpu.zero_page_addr(interconnect, index);
+        IndexedIndirectAM{ addr: addr }
     }
 
-    fn load(&self, cpu: &mut Cpu, cart: &mut Cartridge) -> u8 {
-        let index = self.arg.wrapping_add(cpu.registers.x);
-        // Handle page wrapping
-        let final_addr = if index == 0xFF {
-            (cpu.fetch_byte(cart, 0x0000) as u16) << 8 | (cpu.fetch_byte(cart, index as u16) as u16)
-        } else {
-            cpu.fetch_word(cart, index as u16)
-        };
-        cpu.fetch_byte(cart, final_addr)
+    fn load(&self, cpu: &mut Cpu, interconnect: &mut Interconnect) -> u8 {
+        cpu.fetch_byte(interconnect, self.addr)
     }
 
-    fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
-        let index = self.arg.wrapping_add(cpu.registers.x);
-        // Handle page wrapping
-        let final_addr = if index == 0xFF {
-            (cpu.fetch_byte(cart, 0x0000) as u16) << 8 | (cpu.fetch_byte(cart, index as u16) as u16)
-        } else {
-            cpu.fetch_word(cart, index as u16)
-        };
-        cpu.store(cart, final_addr, val);
+    fn store(&self, cpu: &mut Cpu, interconnect: &mut Interconnect, val: u8) {
+        cpu.store(interconnect, self.addr, val);
     }
 }
 
 impl AddressingMode for IndirectIndexedAM {
-    fn init(cpu: &mut Cpu, cart: &mut Cartridge) -> Self {
-        IndirectIndexedAM{ arg: cpu.load_next_byte_bump_pc(cart) }
+    fn init(cpu: &mut Cpu, interconnect: &mut Interconnect) -> Self {
+        let index = cpu.load_next_byte_bump_pc(interconnect);
+        let addr = cpu.zero_page_addr(interconnect, index).wrapping_add(cpu.registers.y as u16);
+        IndirectIndexedAM{ addr: addr }
     }
 
-    fn load(&self, cpu: &mut Cpu, cart: &mut Cartridge) -> u8 {
-        let index = self.arg;
-        // Check if it's on the page boundary...
-        let addr = if index == 0xFF {
-            (cpu.fetch_byte(cart, 0x0000) as u16) << 8 | cpu.fetch_byte(cart, index as u16) as u16
-        } else {
-            cpu.fetch_word(cart, index as u16)
-        };
-        let final_addr = addr.wrapping_add(cpu.registers.y as u16);
-        cpu.fetch_byte(cart, final_addr)
+    fn load(&self, cpu: &mut Cpu, interconnect: &mut Interconnect) -> u8 {
+        cpu.fetch_byte(interconnect, self.addr)
     }
 
-    fn store(&self, cpu: &mut Cpu, cart: &mut Cartridge, val: u8) {
-        let index = self.arg;
-        // Check if it's on the page boundary...
-        let addr = if index == 0xFF {
-            (cpu.fetch_byte(cart, 0x0000) as u16) << 8 | cpu.fetch_byte(cart, index as u16) as u16
-        } else {
-            cpu.fetch_word(cart, index as u16)
-        };
-        let final_addr = addr.wrapping_add(cpu.registers.y as u16);
-        cpu.store(cart, final_addr, val);
+    fn store(&self, cpu: &mut Cpu, interconnect: &mut Interconnect, val: u8) {
+        cpu.store(interconnect, self.addr, val);
     }
 }
 
@@ -254,55 +222,58 @@ impl Cpu {
         }
     }
 
-    pub fn reset(&mut self) {
-        self.registers.pc = 0xC000; // FIXME: This is only for running NESTEST
+    pub fn reset(&mut self, interconnect: &mut Interconnect) {
+        self.registers.pc = 0xC000;
+        // self.registers.pc = self.fetch_word(interconnect, RESET_VECTOR);
         self.registers.s = 0xFD;
         self.registers.p = ProcessorFlags::from_bits(0x24).unwrap();
     }
 
-    fn load_next_byte_bump_pc(&mut self, cart: &mut Cartridge) -> u8 {
+    fn load_next_byte_bump_pc(&mut self, interconnect: &mut Interconnect) -> u8 {
         let pc = self.registers.pc;
         self.registers.pc += 1;
-        self.fetch_byte(cart, pc)
+        self.fetch_byte(interconnect, pc)
     }
 
-    fn load_next_word_bump_pc(&mut self, cart: &mut Cartridge) -> u16 {
-        self.load_next_byte_bump_pc(cart) as u16 | (self.load_next_byte_bump_pc(cart) as u16) << 8
+    fn load_next_word_bump_pc(&mut self, interconnect: &mut Interconnect) -> u16 {
+        self.load_next_byte_bump_pc(interconnect) as u16 | (self.load_next_byte_bump_pc(interconnect) as u16) << 8
     }
 
-    // For use by debugger
+    fn zero_page_addr(&mut self, interconnect: &mut Interconnect, index: u8) -> u16 {
+        if index == 0xFF {
+            (self.fetch_byte(interconnect, 0x0000) as u16) << 8 | self.fetch_byte(interconnect, index as u16) as u16
+        } else {
+            self.fetch_word(interconnect, index as u16)
+        }
+    }
+
     pub fn pc(&self) -> u16 {
         self.registers.pc
     }
 
-    // Public for debugger
-    pub fn fetch_byte(&mut self, cart: &mut Cartridge, addr: u16) -> u8 {
+    pub fn cycles(&self) -> usize {
+        self.cycles
+    }
+
+    pub fn fetch_byte(&mut self, interconnect: &mut Interconnect, addr: u16) -> u8 {
         match addr {
             0x0...0x07FF => self.ram[addr as usize],
             0x0800...0x1FFF => self.ram[(addr % 0x0800) as usize],
-            0x2000...0x2007 => unimplemented!(), // PPU registers
-            0x2008...0x3FFF => unimplemented!(), // PPU register mirrors
-            0x4000...0x4017 => unimplemented!(), // APU registers
-            0x4018...0x401F => panic!("These registers are disabled during normal operation"),
-            0x4020...0xFFFF => cart.prg_read(addr),
+            0x2000...0xFFFF => interconnect.read_byte(addr),
             _ => unreachable!(),
         }
     }
 
-    fn fetch_word(&mut self, cart: &mut Cartridge, addr: u16) -> u16 {
+    fn fetch_word(&mut self, interconnect: &mut Interconnect, addr: u16) -> u16 {
         // The 6502 is little endian (LSB first)
-        ((self.fetch_byte(cart, addr + 1) as u16) << 8) | self.fetch_byte(cart, addr) as u16
+        ((self.fetch_byte(interconnect, addr + 1) as u16) << 8) | self.fetch_byte(interconnect, addr) as u16
     }
 
-    fn store(&mut self, cart: &mut Cartridge, addr: u16, val: u8) {
+    fn store(&mut self, interconnect: &mut Interconnect, addr: u16, val: u8) {
         match addr {
             0x0...0x07FF => self.ram[addr as usize] = val,
             0x0800...0x1FFF => self.ram[(addr % 0x0800) as usize] = val,
-            0x2000...0x2007 => unimplemented!(), // PPU registers
-            0x2008...0x3FFF => unimplemented!(), // PPU register mirrors
-            0x4000...0x4017 => unimplemented!(), // APU registers
-            0x4018...0x401F => panic!("These registers are disabled during normal operation"),
-            0x4020...0xFFFF => cart.prg_write(addr, val),
+            0x2000...0xFFFF => interconnect.write_byte(addr, val),
             _ => unreachable!(),
         }
     }
@@ -331,174 +302,167 @@ impl Cpu {
         ((high_byte as u16) << 8) | (low_byte as u16)
     }
 
-    fn branch(&mut self, am: RelativeAM, flag: ProcessorFlags, set: bool, branch_type: &str) {
-        let offset_addr = self.registers.pc.wrapping_add((am.arg as i8) as u16);
-        if set == self.registers.p.contains(flag) {
-            self.registers.pc = offset_addr;
-        }
-    }
-
     fn add_cycles(&mut self, num_cycles: usize) {
         self.cycles += 3 * num_cycles;
         // TODO: Some kind of rollover?
     }
 
-    pub fn step(&mut self, cart: &mut Cartridge) -> u8 {
-        let opcode = self.load_next_byte_bump_pc(cart);
+    pub fn step(&mut self, interconnect: &mut Interconnect) -> u8 {
+        let opcode = self.load_next_byte_bump_pc(interconnect);
         match opcode {
             // Branches
-            0x10 => { let am = RelativeAM::init(self, cart); self.bpl(am); }
-            0x30 => { let am = RelativeAM::init(self, cart); self.bmi(am); }
-            0x50 => { let am = RelativeAM::init(self, cart); self.bvc(am); }
-            0x70 => { let am = RelativeAM::init(self, cart); self.bvs(am); }
-            0x90 => { let am = RelativeAM::init(self, cart); self.bcc(am); }
-            0xB0 => { let am = RelativeAM::init(self, cart); self.bcs(am); }
-            0xD0 => { let am = RelativeAM::init(self, cart); self.bne(am); }
-            0xF0 => { let am = RelativeAM::init(self, cart); self.beq(am); }
+            0x10 => { let am = RelativeAM::init(self, interconnect); self.bpl(am); }
+            0x30 => { let am = RelativeAM::init(self, interconnect); self.bmi(am); }
+            0x50 => { let am = RelativeAM::init(self, interconnect); self.bvc(am); }
+            0x70 => { let am = RelativeAM::init(self, interconnect); self.bvs(am); }
+            0x90 => { let am = RelativeAM::init(self, interconnect); self.bcc(am); }
+            0xB0 => { let am = RelativeAM::init(self, interconnect); self.bcs(am); }
+            0xD0 => { let am = RelativeAM::init(self, interconnect); self.bne(am); }
+            0xF0 => { let am = RelativeAM::init(self, interconnect); self.beq(am); }
 
             // ALU operations
-            0x61 => { let am = IndexedIndirectAM::init(self, cart); self.adc(cart, am); }
-            0x65 => { let am = ZeroPageAM::init(self, cart); self.adc(cart, am); }
-            0x69 => { let am = ImmediateAM::init(self, cart); self.adc(cart, am); }
-            0x6D => { let am = AbsoluteAM::init(self, cart); self.adc(cart, am); }
-            0x71 => { let am = IndirectIndexedAM::init(self, cart); self.adc(cart, am); }
-            0x75 => { let am = ZeroPageIdxXAM::init(self, cart); self.adc(cart, am); }
-            0x79 => { let am = AbsoluteIdxYAM::init(self, cart); self.adc(cart, am); }
-            0x7D => { let am = AbsoluteIdxXAM::init(self, cart); self.adc(cart, am); }
+            0x61 => { let am = IndexedIndirectAM::init(self, interconnect); self.adc(interconnect, am); }
+            0x65 => { let am = ZeroPageAM::init(self, interconnect); self.adc(interconnect, am); }
+            0x69 => { let am = ImmediateAM::init(self, interconnect); self.adc(interconnect, am); }
+            0x6D => { let am = AbsoluteAM::init(self, interconnect); self.adc(interconnect, am); }
+            0x71 => { let am = IndirectIndexedAM::init(self, interconnect); self.adc(interconnect, am); }
+            0x75 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.adc(interconnect, am); }
+            0x79 => { let am = AbsoluteIdxYAM::init(self, interconnect); self.adc(interconnect, am); }
+            0x7D => { let am = AbsoluteIdxXAM::init(self, interconnect); self.adc(interconnect, am); }
 
-            0x21 => { let am = IndexedIndirectAM::init(self, cart); self.and(cart, am); }
-            0x25 => { let am = ZeroPageAM::init(self, cart); self.and(cart, am); }
-            0x29 => { let am = ImmediateAM::init(self, cart); self.and(cart, am); }
-            0x2D => { let am = AbsoluteAM::init(self, cart); self.and(cart, am); }
-            0x31 => { let am = IndirectIndexedAM::init(self, cart); self.and(cart, am); }
-            0x35 => { let am = ZeroPageIdxXAM::init(self, cart); self.and(cart, am); }
-            0x39 => { let am = AbsoluteIdxYAM::init(self, cart); self.and(cart, am); }
-            0x3D => { let am = AbsoluteIdxXAM::init(self, cart); self.and(cart, am); }
+            0x21 => { let am = IndexedIndirectAM::init(self, interconnect); self.and(interconnect, am); }
+            0x25 => { let am = ZeroPageAM::init(self, interconnect); self.and(interconnect, am); }
+            0x29 => { let am = ImmediateAM::init(self, interconnect); self.and(interconnect, am); }
+            0x2D => { let am = AbsoluteAM::init(self, interconnect); self.and(interconnect, am); }
+            0x31 => { let am = IndirectIndexedAM::init(self, interconnect); self.and(interconnect, am); }
+            0x35 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.and(interconnect, am); }
+            0x39 => { let am = AbsoluteIdxYAM::init(self, interconnect); self.and(interconnect, am); }
+            0x3D => { let am = AbsoluteIdxXAM::init(self, interconnect); self.and(interconnect, am); }
 
-            0x06 => { let am = ZeroPageAM::init(self, cart); self.asl(cart, am); }
-            0x0A => { let am = AccumulatorAM::init(self, cart); self.asl(cart, am); }
-            0x0E => { let am = AbsoluteAM::init(self, cart); self.asl(cart, am); }
-            0x16 => { let am = ZeroPageIdxXAM::init(self, cart); self.asl(cart, am); }
-            0x1E => { let am = AbsoluteIdxXAM::init(self, cart); self.asl(cart, am); }
+            0x06 => { let am = ZeroPageAM::init(self, interconnect); self.asl(interconnect, am); }
+            0x0A => { let am = AccumulatorAM::init(self, interconnect); self.asl(interconnect, am); }
+            0x0E => { let am = AbsoluteAM::init(self, interconnect); self.asl(interconnect, am); }
+            0x16 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.asl(interconnect, am); }
+            0x1E => { let am = AbsoluteIdxXAM::init(self, interconnect); self.asl(interconnect, am); }
 
-            0x24 => { let am = ZeroPageAM::init(self, cart); self.bit(cart, am); }
-            0x2C => { let am = AbsoluteAM::init(self, cart); self.bit(cart, am); }
+            0x24 => { let am = ZeroPageAM::init(self, interconnect); self.bit(interconnect, am); }
+            0x2C => { let am = AbsoluteAM::init(self, interconnect); self.bit(interconnect, am); }
 
-            0xC1 => { let am = IndexedIndirectAM::init(self, cart); self.cmp(cart, am); }
-            0xC5 => { let am = ZeroPageAM::init(self, cart); self.cmp(cart, am); }
-            0xC9 => { let am = ImmediateAM::init(self, cart); self.cmp(cart, am); }
-            0xCD => { let am = AbsoluteAM::init(self, cart); self.cmp(cart, am); }
-            0xD1 => { let am = IndirectIndexedAM::init(self, cart); self.cmp(cart, am); }
-            0xD5 => { let am = ZeroPageIdxXAM::init(self, cart); self.cmp(cart, am); }
-            0xD9 => { let am = AbsoluteIdxYAM::init(self, cart); self.cmp(cart, am); }
-            0xDD => { let am = AbsoluteIdxXAM::init(self, cart); self.cmp(cart, am); }
+            0xC1 => { let am = IndexedIndirectAM::init(self, interconnect); self.cmp(interconnect, am); }
+            0xC5 => { let am = ZeroPageAM::init(self, interconnect); self.cmp(interconnect, am); }
+            0xC9 => { let am = ImmediateAM::init(self, interconnect); self.cmp(interconnect, am); }
+            0xCD => { let am = AbsoluteAM::init(self, interconnect); self.cmp(interconnect, am); }
+            0xD1 => { let am = IndirectIndexedAM::init(self, interconnect); self.cmp(interconnect, am); }
+            0xD5 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.cmp(interconnect, am); }
+            0xD9 => { let am = AbsoluteIdxYAM::init(self, interconnect); self.cmp(interconnect, am); }
+            0xDD => { let am = AbsoluteIdxXAM::init(self, interconnect); self.cmp(interconnect, am); }
 
-            0xE0 => { let am = ImmediateAM::init(self, cart); self.cpx(cart, am); }
-            0xE4 => { let am = ZeroPageAM::init(self, cart); self.cpx(cart, am); }
-            0xEC => { let am = AbsoluteAM::init(self, cart); self.cpx(cart, am); }
+            0xE0 => { let am = ImmediateAM::init(self, interconnect); self.cpx(interconnect, am); }
+            0xE4 => { let am = ZeroPageAM::init(self, interconnect); self.cpx(interconnect, am); }
+            0xEC => { let am = AbsoluteAM::init(self, interconnect); self.cpx(interconnect, am); }
 
-            0xC0 => { let am = ImmediateAM::init(self, cart); self.cpy(cart, am); }
-            0xC4 => { let am = ZeroPageAM::init(self, cart); self.cpy(cart, am); }
-            0xCC => { let am = AbsoluteAM::init(self, cart); self.cpy(cart, am); }
+            0xC0 => { let am = ImmediateAM::init(self, interconnect); self.cpy(interconnect, am); }
+            0xC4 => { let am = ZeroPageAM::init(self, interconnect); self.cpy(interconnect, am); }
+            0xCC => { let am = AbsoluteAM::init(self, interconnect); self.cpy(interconnect, am); }
 
-            0x41 => { let am = IndexedIndirectAM::init(self, cart); self.eor(cart, am); }
-            0x45 => { let am = ZeroPageAM::init(self, cart); self.eor(cart, am); }
-            0x49 => { let am = ImmediateAM::init(self, cart); self.eor(cart, am); }
-            0x4D => { let am = AbsoluteAM::init(self, cart); self.eor(cart, am); }
-            0x51 => { let am = IndirectIndexedAM::init(self, cart); self.eor(cart, am); }
-            0x55 => { let am = ZeroPageIdxXAM::init(self, cart); self.eor(cart, am); }
-            0x59 => { let am = AbsoluteIdxYAM::init(self, cart); self.eor(cart, am); }
-            0x5D => { let am = AbsoluteIdxXAM::init(self, cart); self.eor(cart, am); }
+            0x41 => { let am = IndexedIndirectAM::init(self, interconnect); self.eor(interconnect, am); }
+            0x45 => { let am = ZeroPageAM::init(self, interconnect); self.eor(interconnect, am); }
+            0x49 => { let am = ImmediateAM::init(self, interconnect); self.eor(interconnect, am); }
+            0x4D => { let am = AbsoluteAM::init(self, interconnect); self.eor(interconnect, am); }
+            0x51 => { let am = IndirectIndexedAM::init(self, interconnect); self.eor(interconnect, am); }
+            0x55 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.eor(interconnect, am); }
+            0x59 => { let am = AbsoluteIdxYAM::init(self, interconnect); self.eor(interconnect, am); }
+            0x5D => { let am = AbsoluteIdxXAM::init(self, interconnect); self.eor(interconnect, am); }
 
-            0x4A => { let am = AccumulatorAM::init(self, cart); self.lsr(cart, am); }
-            0x46 => { let am = ZeroPageAM::init(self, cart); self.lsr(cart, am); }
-            0x4E => { let am = AbsoluteAM::init(self, cart); self.lsr(cart, am); }
-            0x56 => { let am = ZeroPageIdxXAM::init(self, cart); self.lsr(cart, am); }
-            0x5E => { let am = AbsoluteIdxXAM::init(self, cart); self.lsr(cart, am); }
+            0x4A => { let am = AccumulatorAM::init(self, interconnect); self.lsr(interconnect, am); }
+            0x46 => { let am = ZeroPageAM::init(self, interconnect); self.lsr(interconnect, am); }
+            0x4E => { let am = AbsoluteAM::init(self, interconnect); self.lsr(interconnect, am); }
+            0x56 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.lsr(interconnect, am); }
+            0x5E => { let am = AbsoluteIdxXAM::init(self, interconnect); self.lsr(interconnect, am); }
 
-            0x01 => { let am = IndexedIndirectAM::init(self, cart); self.ora(cart, am); }
-            0x05 => { let am = ZeroPageAM::init(self, cart); self.ora(cart, am); }
-            0x09 => { let am = ImmediateAM::init(self, cart); self.ora(cart, am); }
-            0x0D => { let am = AbsoluteAM::init(self, cart); self.ora(cart, am); }
-            0x11 => { let am = IndirectIndexedAM::init(self, cart); self.ora(cart, am); }
-            0x15 => { let am = ZeroPageIdxXAM::init(self, cart); self.ora(cart, am); }
-            0x19 => { let am = AbsoluteIdxYAM::init(self, cart); self.ora(cart, am); }
-            0x1D => { let am = AbsoluteIdxXAM::init(self, cart); self.ora(cart, am); }
+            0x01 => { let am = IndexedIndirectAM::init(self, interconnect); self.ora(interconnect, am); }
+            0x05 => { let am = ZeroPageAM::init(self, interconnect); self.ora(interconnect, am); }
+            0x09 => { let am = ImmediateAM::init(self, interconnect); self.ora(interconnect, am); }
+            0x0D => { let am = AbsoluteAM::init(self, interconnect); self.ora(interconnect, am); }
+            0x11 => { let am = IndirectIndexedAM::init(self, interconnect); self.ora(interconnect, am); }
+            0x15 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.ora(interconnect, am); }
+            0x19 => { let am = AbsoluteIdxYAM::init(self, interconnect); self.ora(interconnect, am); }
+            0x1D => { let am = AbsoluteIdxXAM::init(self, interconnect); self.ora(interconnect, am); }
 
-            0x2A => { let am = AccumulatorAM::init(self, cart);  self.rol(cart, am); }
-            0x26 => { let am = ZeroPageAM::init(self, cart); self.rol(cart, am); }
-            0x2E => { let am = AbsoluteAM::init(self, cart); self.rol(cart, am); }
-            0x36 => { let am = ZeroPageIdxXAM::init(self, cart); self.rol(cart, am); }
-            0x3E => { let am = AbsoluteIdxXAM::init(self, cart); self.rol(cart, am); }
+            0x2A => { let am = AccumulatorAM::init(self, interconnect);  self.rol(interconnect, am); }
+            0x26 => { let am = ZeroPageAM::init(self, interconnect); self.rol(interconnect, am); }
+            0x2E => { let am = AbsoluteAM::init(self, interconnect); self.rol(interconnect, am); }
+            0x36 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.rol(interconnect, am); }
+            0x3E => { let am = AbsoluteIdxXAM::init(self, interconnect); self.rol(interconnect, am); }
 
-            0x6A => { let am = AccumulatorAM::init(self, cart); self.ror(cart, am); }
-            0x66 => { let am = ZeroPageAM::init(self, cart); self.ror(cart, am); }
-            0x6E => { let am = AbsoluteAM::init(self, cart); self.ror(cart, am); }
-            0x76 => { let am = ZeroPageIdxXAM::init(self, cart); self.ror(cart, am); }
-            0x7E => { let am = AbsoluteIdxXAM::init(self, cart); self.ror(cart, am); }
+            0x6A => { let am = AccumulatorAM::init(self, interconnect); self.ror(interconnect, am); }
+            0x66 => { let am = ZeroPageAM::init(self, interconnect); self.ror(interconnect, am); }
+            0x6E => { let am = AbsoluteAM::init(self, interconnect); self.ror(interconnect, am); }
+            0x76 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.ror(interconnect, am); }
+            0x7E => { let am = AbsoluteIdxXAM::init(self, interconnect); self.ror(interconnect, am); }
 
-            0xE1 => { let am = IndexedIndirectAM::init(self, cart); self.sbc(cart, am); }
-            0xE5 => { let am = ZeroPageAM::init(self, cart); self.sbc(cart, am); }
-            0xE9 => { let am = ImmediateAM::init(self, cart); self.sbc(cart, am); }
-            0xED => { let am = AbsoluteAM::init(self, cart); self.sbc(cart, am); }
-            0xF1 => { let am = IndirectIndexedAM::init(self, cart); self.sbc(cart, am); }
-            0xF5 => { let am = ZeroPageIdxXAM::init(self, cart); self.sbc(cart, am); }
-            0xF9 => { let am = AbsoluteIdxYAM::init(self, cart); self.sbc(cart, am); }
-            0xFD => { let am = AbsoluteIdxXAM::init(self, cart); self.sbc(cart, am); }
+            0xE1 => { let am = IndexedIndirectAM::init(self, interconnect); self.sbc(interconnect, am); }
+            0xE5 => { let am = ZeroPageAM::init(self, interconnect); self.sbc(interconnect, am); }
+            0xE9 => { let am = ImmediateAM::init(self, interconnect); self.sbc(interconnect, am); }
+            0xED => { let am = AbsoluteAM::init(self, interconnect); self.sbc(interconnect, am); }
+            0xF1 => { let am = IndirectIndexedAM::init(self, interconnect); self.sbc(interconnect, am); }
+            0xF5 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.sbc(interconnect, am); }
+            0xF9 => { let am = AbsoluteIdxYAM::init(self, interconnect); self.sbc(interconnect, am); }
+            0xFD => { let am = AbsoluteIdxXAM::init(self, interconnect); self.sbc(interconnect, am); }
 
             // Increments and Decrements
-            0xE6 => { let am = ZeroPageAM::init(self, cart); self.inc(cart, am); }
-            0xEE => { let am = AbsoluteAM::init(self, cart); self.inc(cart, am); }
-            0xF6 => { let am = ZeroPageIdxXAM::init(self, cart); self.inc(cart, am); }
-            0xFE => { let am = AbsoluteIdxXAM::init(self, cart); self.inc(cart, am); }
+            0xE6 => { let am = ZeroPageAM::init(self, interconnect); self.inc(interconnect, am); }
+            0xEE => { let am = AbsoluteAM::init(self, interconnect); self.inc(interconnect, am); }
+            0xF6 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.inc(interconnect, am); }
+            0xFE => { let am = AbsoluteIdxXAM::init(self, interconnect); self.inc(interconnect, am); }
             0xE8 => { self.inx(); }
             0xC8 => { self.iny(); }
 
-            0xC6 => { let am = ZeroPageAM::init(self, cart); self.dec(cart, am); }
-            0xCE => { let am = AbsoluteAM::init(self, cart); self.dec(cart, am); }
-            0xD6 => { let am = ZeroPageIdxXAM::init(self, cart); self.dec(cart, am); }
-            0xDE => { let am = AbsoluteIdxXAM::init(self, cart); self.dec(cart, am); }
+            0xC6 => { let am = ZeroPageAM::init(self, interconnect); self.dec(interconnect, am); }
+            0xCE => { let am = AbsoluteAM::init(self, interconnect); self.dec(interconnect, am); }
+            0xD6 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.dec(interconnect, am); }
+            0xDE => { let am = AbsoluteIdxXAM::init(self, interconnect); self.dec(interconnect, am); }
             0xCA => { self.dex(); }
             0x88 => { self.dey(); }
 
             // Loads
-            0xA1 => { let am = IndexedIndirectAM::init(self, cart); self.lda(cart, am); }
-            0xA5 => { let am = ZeroPageAM::init(self, cart); self.lda(cart, am); }
-            0xA9 => { let am = ImmediateAM::init(self, cart); self.lda(cart, am); }
-            0xAD => { let am = AbsoluteAM::init(self, cart); self.lda(cart, am); }
-            0xB1 => { let am = IndirectIndexedAM::init(self, cart); self.lda(cart, am); }
-            0xB5 => { let am = ZeroPageIdxXAM::init(self, cart); self.lda(cart, am); }
-            0xB9 => { let am = AbsoluteIdxYAM::init(self, cart); self.lda(cart, am); }
-            0xBD => { let am = AbsoluteIdxXAM::init(self, cart); self.lda(cart, am); }
+            0xA1 => { let am = IndexedIndirectAM::init(self, interconnect); self.lda(interconnect, am); }
+            0xA5 => { let am = ZeroPageAM::init(self, interconnect); self.lda(interconnect, am); }
+            0xA9 => { let am = ImmediateAM::init(self, interconnect); self.lda(interconnect, am); }
+            0xAD => { let am = AbsoluteAM::init(self, interconnect); self.lda(interconnect, am); }
+            0xB1 => { let am = IndirectIndexedAM::init(self, interconnect); self.lda(interconnect, am); }
+            0xB5 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.lda(interconnect, am); }
+            0xB9 => { let am = AbsoluteIdxYAM::init(self, interconnect); self.lda(interconnect, am); }
+            0xBD => { let am = AbsoluteIdxXAM::init(self, interconnect); self.lda(interconnect, am); }
 
-            0xA2 => { let am = ImmediateAM::init(self, cart); self.ldx(cart, am); }
-            0xA6 => { let am = ZeroPageAM::init(self, cart); self.ldx(cart, am); }
-            0xAE => { let am = AbsoluteAM::init(self, cart); self.ldx(cart, am); }
-            0xB6 => { let am = ZeroPageIdxYAM::init(self, cart); self.ldx(cart, am); }
-            0xBE => { let am = AbsoluteIdxYAM::init(self, cart); self.ldx(cart, am); }
+            0xA2 => { let am = ImmediateAM::init(self, interconnect); self.ldx(interconnect, am); }
+            0xA6 => { let am = ZeroPageAM::init(self, interconnect); self.ldx(interconnect, am); }
+            0xAE => { let am = AbsoluteAM::init(self, interconnect); self.ldx(interconnect, am); }
+            0xB6 => { let am = ZeroPageIdxYAM::init(self, interconnect); self.ldx(interconnect, am); }
+            0xBE => { let am = AbsoluteIdxYAM::init(self, interconnect); self.ldx(interconnect, am); }
 
-            0xA0 => { let am = ImmediateAM::init(self, cart); self.ldy(cart, am); }
-            0xA4 => { let am = ZeroPageAM::init(self, cart); self.ldy(cart, am); }
-            0xAC => { let am = AbsoluteAM::init(self, cart); self.ldy(cart, am); }
-            0xB4 => { let am = ZeroPageIdxXAM::init(self, cart); self.ldy(cart, am); }
-            0xBC => { let am = AbsoluteIdxXAM::init(self, cart); self.ldy(cart, am); }
+            0xA0 => { let am = ImmediateAM::init(self, interconnect); self.ldy(interconnect, am); }
+            0xA4 => { let am = ZeroPageAM::init(self, interconnect); self.ldy(interconnect, am); }
+            0xAC => { let am = AbsoluteAM::init(self, interconnect); self.ldy(interconnect, am); }
+            0xB4 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.ldy(interconnect, am); }
+            0xBC => { let am = AbsoluteIdxXAM::init(self, interconnect); self.ldy(interconnect, am); }
 
             // Stores
-            0x81 => { let am = IndexedIndirectAM::init(self, cart); self.sta(cart, am); }
-            0x85 => { let am = ZeroPageAM::init(self, cart); self.sta(cart, am); }
-            0x8D => { let am = AbsoluteAM::init(self, cart); self.sta(cart, am); }
-            0x91 => { let am = IndirectIndexedAM::init(self, cart); self.sta(cart, am); }
-            0x95 => { let am = ZeroPageIdxXAM::init(self, cart); self.sta(cart, am); }
-            0x99 => { let am = AbsoluteIdxYAM::init(self, cart); self.sta(cart, am); }
-            0x9D => { let am = AbsoluteIdxXAM::init(self, cart); self.sta(cart, am); }
+            0x81 => { let am = IndexedIndirectAM::init(self, interconnect); self.sta(interconnect, am); }
+            0x85 => { let am = ZeroPageAM::init(self, interconnect); self.sta(interconnect, am); }
+            0x8D => { let am = AbsoluteAM::init(self, interconnect); self.sta(interconnect, am); }
+            0x91 => { let am = IndirectIndexedAM::init(self, interconnect); self.sta(interconnect, am); }
+            0x95 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.sta(interconnect, am); }
+            0x99 => { let am = AbsoluteIdxYAM::init(self, interconnect); self.sta(interconnect, am); }
+            0x9D => { let am = AbsoluteIdxXAM::init(self, interconnect); self.sta(interconnect, am); }
 
-            0x86 => { let am = ZeroPageAM::init(self, cart); self.stx(cart, am); }
-            0x8E => { let am = AbsoluteAM::init(self, cart); self.stx(cart, am); }
-            0x96 => { let am = ZeroPageIdxYAM::init(self, cart); self.stx(cart, am); }
+            0x86 => { let am = ZeroPageAM::init(self, interconnect); self.stx(interconnect, am); }
+            0x8E => { let am = AbsoluteAM::init(self, interconnect); self.stx(interconnect, am); }
+            0x96 => { let am = ZeroPageIdxYAM::init(self, interconnect); self.stx(interconnect, am); }
 
-            0x84 => { let am = ZeroPageAM::init(self, cart); self.sty(cart, am); }
-            0x8C => { let am = AbsoluteAM::init(self, cart); self.sty(cart, am); }
-            0x94 => { let am = ZeroPageIdxXAM::init(self, cart); self.sty(cart, am); }
+            0x84 => { let am = ZeroPageAM::init(self, interconnect); self.sty(interconnect, am); }
+            0x8C => { let am = AbsoluteAM::init(self, interconnect); self.sty(interconnect, am); }
+            0x94 => { let am = ZeroPageIdxXAM::init(self, interconnect); self.sty(interconnect, am); }
 
             // Flag sets
             0x38 => { self.sec(); }
@@ -525,9 +489,9 @@ impl Cpu {
             0x98 => { self.tya(); }
 
             // Jumps
-            0x4C => self.jmp_absolute(cart),
-            0x6C => self.jmp_indirect(cart),
-            0x20 => self.jsr(cart),
+            0x4C => self.jmp_absolute(interconnect),
+            0x6C => self.jmp_indirect(interconnect),
+            0x20 => self.jsr(interconnect),
             0x40 => self.rti(),
             0x60 => self.rts(),
 
@@ -540,14 +504,22 @@ impl Cpu {
 
     // INSTRUCTIONS
     // Branches
-    fn bcs(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::CARRY, true, "BCS"); }
-    fn bcc(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::CARRY, false, "BCC"); }
-    fn beq(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::ZERO, true, "BEQ"); }
-    fn bne(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::ZERO, false, "BNE"); }
-    fn bvs(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::OVERFLOW, true, "BVS"); }
-    fn bvc(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::OVERFLOW, false, "BVC"); }
-    fn bpl(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::NEGATIVE, false, "BPL"); }
-    fn bmi(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::NEGATIVE, true, "BMI"); }
+    fn bcs(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::CARRY, true); }
+    fn bcc(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::CARRY, false); }
+    fn beq(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::ZERO, true); }
+    fn bne(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::ZERO, false); }
+    fn bvs(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::OVERFLOW, true); }
+    fn bvc(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::OVERFLOW, false); }
+    fn bpl(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::NEGATIVE, false); }
+    fn bmi(&mut self, am: RelativeAM) { self.branch(am, ProcessorFlags::NEGATIVE, true); }
+
+    fn branch(&mut self, am: RelativeAM, flag: ProcessorFlags, set: bool) {
+        let offset_addr = self.registers.pc.wrapping_add((am.arg as i8) as u16);
+        if set == self.registers.p.contains(flag) {
+            self.registers.pc = offset_addr;
+        }
+    }
+
 
     // Flag sets
     fn sec(&mut self) {
@@ -599,9 +571,9 @@ impl Cpu {
     }
 
     // ALU Ops
-    fn adc<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
+    fn adc<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
         let a = self.registers.a;
-        let m = am.load(self, cart);
+        let m = am.load(self, interconnect);
         let c = if self.registers.p.contains(ProcessorFlags::CARRY) { 1 } else { 0 };
         let result = a.wrapping_add(m).wrapping_add(c);
         self.registers.a = result;
@@ -611,25 +583,25 @@ impl Cpu {
         self.registers.p.set(ProcessorFlags::NEGATIVE, result & (1 << 7) != 0);
     }
 
-    fn asl<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
-        let mut arg = am.load(self, cart);
+    fn asl<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
+        let mut arg = am.load(self, interconnect);
         self.registers.p.set(ProcessorFlags::CARRY, (arg & (1 << 7)) != 0); // set based on original value
         arg = arg << 1;
-        am.store(self, cart, arg);
+        am.store(self, interconnect, arg);
         self.registers.p.set(ProcessorFlags::ZERO, arg == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, arg & (1 << 7) != 0);
     }
 
-    fn and<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
-        let a = self.registers.a & am.load(self, cart);
+    fn and<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
+        let a = self.registers.a & am.load(self, interconnect);
         self.registers.a = a;
         self.registers.p.set(ProcessorFlags::ZERO, a == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, a & (1 << 7) != 0);
     }
 
-    fn bit<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
+    fn bit<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
         let a = self.registers.a;
-        let m = am.load(self, cart);
+        let m = am.load(self, interconnect);
         self.registers.p.set(ProcessorFlags::ZERO, a & m == 0);
         self.registers.p.set(ProcessorFlags::OVERFLOW, m & (1 << 6) != 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, m & (1 << 7) != 0);
@@ -641,72 +613,72 @@ impl Cpu {
         self.registers.p.set(ProcessorFlags::NEGATIVE, lhs.wrapping_sub(rhs) & (1 << 7) != 0);
     }
 
-    fn cmp<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
+    fn cmp<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
         let a = self.registers.a;
-        let m = am.load(self, cart);
+        let m = am.load(self, interconnect);
         self.compare(a, m);
     }
 
-    fn cpx<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
+    fn cpx<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
         let x = self.registers.x;
-        let m = am.load(self, cart);
+        let m = am.load(self, interconnect);
         self.compare(x, m);
     }
 
-    fn cpy<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
+    fn cpy<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
         let y = self.registers.y;
-        let m = am.load(self, cart);
+        let m = am.load(self, interconnect);
         self.compare(y, m);
     }
 
-    fn eor<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
+    fn eor<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
         let a = self.registers.a;
-        let m = am.load(self, cart);
+        let m = am.load(self, interconnect);
         self.registers.a = a ^ m;
         self.registers.p.set(ProcessorFlags::ZERO, self.registers.a == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, self.registers.a & (1 << 7) != 0);
     }
 
-    fn lsr<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
-        let mut arg = am.load(self, cart);
+    fn lsr<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
+        let mut arg = am.load(self, interconnect);
         self.registers.p.set(ProcessorFlags::CARRY, (arg & (1 << 0)) != 0); // set based on original value
         arg = arg >> 1;
-        am.store(self, cart, arg);
+        am.store(self, interconnect, arg);
         self.registers.p.set(ProcessorFlags::ZERO, arg == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, arg & (1 << 7) != 0);
     }
 
-    fn ora<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
+    fn ora<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
         let a = self.registers.a;
-        let m = am.load(self, cart);
+        let m = am.load(self, interconnect);
         self.registers.a = a | m;
         self.registers.p.set(ProcessorFlags::ZERO, self.registers.a == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, self.registers.a & (1 << 7) != 0);
     }
 
-    fn rol<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
-        let mut arg = am.load(self, cart);
+    fn rol<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
+        let mut arg = am.load(self, interconnect);
         let old_carry = if self.registers.p.contains(ProcessorFlags::CARRY) { 1 } else { 0 };
         self.registers.p.set(ProcessorFlags::CARRY, arg & (1 << 7) != 0);
         arg = (arg << 1) | old_carry;
-        am.store(self, cart, arg);
+        am.store(self, interconnect, arg);
         self.registers.p.set(ProcessorFlags::ZERO, arg == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, arg & (1 << 7) != 0);
     }
 
-    fn ror<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
-        let mut arg = am.load(self, cart);
+    fn ror<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
+        let mut arg = am.load(self, interconnect);
         let old_carry = if self.registers.p.contains(ProcessorFlags::CARRY) { 1 << 7 } else { 0 };
         self.registers.p.set(ProcessorFlags::CARRY, arg & (1 << 0) != 0);
         arg = (arg >> 1) | old_carry;
-        am.store(self, cart, arg);
+        am.store(self, interconnect, arg);
         self.registers.p.set(ProcessorFlags::ZERO, arg == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, arg & (1 << 7) != 0);
     }
 
-    fn sbc<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
+    fn sbc<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
         let a = self.registers.a;
-        let m = !am.load(self, cart);
+        let m = am.load(self, interconnect);
         let c = if self.registers.p.contains(ProcessorFlags::CARRY) { 1 } else { 0 };
         let result = a.wrapping_add(m).wrapping_add(c);
         self.registers.a = result;
@@ -717,12 +689,12 @@ impl Cpu {
     }
 
     // Increments and decrements
-    fn inc<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
-        let m = am.load(self, cart);
+    fn inc<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
+        let m = am.load(self, interconnect);
         let val = m.wrapping_add(1);
         self.registers.p.set(ProcessorFlags::ZERO, val == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, val & (1 << 7) != 0);
-        am.store(self, cart, val);
+        am.store(self, interconnect, val);
     }
 
     fn inx(&mut self) {
@@ -739,24 +711,22 @@ impl Cpu {
         self.registers.p.set(ProcessorFlags::NEGATIVE, self.registers.y & (1 << 7) != 0);
     }
 
-    fn dec<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
-        let m = am.load(self, cart);
+    fn dec<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
+        let m = am.load(self, interconnect);
         let val = m.wrapping_sub(1);
         self.registers.p.set(ProcessorFlags::ZERO, val == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, val & (1 << 7) != 0);
-        am.store(self, cart, val);
+        am.store(self, interconnect, val);
     }
 
     fn dex(&mut self) {
-        let x = self.registers.x.wrapping_sub(1);
-        self.registers.x = x;
+        self.registers.x = self.registers.x.wrapping_sub(1);
         self.registers.p.set(ProcessorFlags::ZERO, self.registers.x == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, self.registers.x & (1 << 7) != 0);
     }
 
     fn dey(&mut self) {
-        let y = self.registers.y.wrapping_sub(1);
-        self.registers.y = y;
+        self.registers.y = self.registers.y.wrapping_sub(1);
         self.registers.p.set(ProcessorFlags::ZERO, self.registers.y == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, self.registers.y & (1 << 7) != 0);
     }
@@ -797,60 +767,60 @@ impl Cpu {
     }
 
     // Loads
-    fn lda<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
-        self.registers.a = am.load(self, cart);
+    fn lda<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
+        self.registers.a = am.load(self, interconnect);
         self.registers.p.set(ProcessorFlags::ZERO, self.registers.a == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, self.registers.a & (1 << 7) != 0 );
     }
 
-    fn ldx<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
-        self.registers.x = am.load(self, cart);
+    fn ldx<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
+        self.registers.x = am.load(self, interconnect);
         self.registers.p.set(ProcessorFlags::ZERO, self.registers.x == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, self.registers.x & (1 << 7) != 0);
     }
 
-    fn ldy<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
-        self.registers.y = am.load(self, cart);
+    fn ldy<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
+        self.registers.y = am.load(self, interconnect);
         self.registers.p.set(ProcessorFlags::ZERO, self.registers.y == 0);
         self.registers.p.set(ProcessorFlags::NEGATIVE, self.registers.y & (1 << 7) != 0);
     }
 
     // Stores
-    fn sta<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
+    fn sta<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
         let a = self.registers.a;
-        am.store(self, cart, a);
+        am.store(self, interconnect, a);
     }
 
-    fn stx<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
+    fn stx<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
         let x = self.registers.x;
-        am.store(self, cart, x);
+        am.store(self, interconnect, x);
     }
 
-    fn sty<AM: AddressingMode>(&mut self, cart: &mut Cartridge, am: AM) {
+    fn sty<AM: AddressingMode>(&mut self, interconnect: &mut Interconnect, am: AM) {
         let y = self.registers.y;
-        am.store(self, cart, y);
+        am.store(self, interconnect, y);
     }
 
     // Jumps are the only instructions that use absolute addressing, so they are given two methods
-    fn jmp_absolute(&mut self, cart: &mut Cartridge) {
-        let addr = self.load_next_word_bump_pc(cart);
+    fn jmp_absolute(&mut self, interconnect: &mut Interconnect) {
+        let addr = self.load_next_word_bump_pc(interconnect);
         self.registers.pc = addr;
     }
 
-    fn jmp_indirect(&mut self, cart: &mut Cartridge) {
-        let addr = self.load_next_word_bump_pc(cart);
+    fn jmp_indirect(&mut self, interconnect: &mut Interconnect) {
+        let addr = self.load_next_word_bump_pc(interconnect);
         // Handle page boundary
         let final_addr = if addr & 0xFF == 0xFF {
-            (self.fetch_byte(cart, addr + 1 - 0x100) as u16) << 8 |
-            self.fetch_byte(cart, addr) as u16
+            (self.fetch_byte(interconnect, addr + 1 - 0x100) as u16) << 8 |
+            self.fetch_byte(interconnect, addr) as u16
         } else {
-            self.fetch_word(cart, addr)
+            self.fetch_word(interconnect, addr)
         };
         self.registers.pc = final_addr;
     }
 
-    fn jsr(&mut self, cart: &mut Cartridge) {
-        let target = self.load_next_word_bump_pc(cart);
+    fn jsr(&mut self, interconnect: &mut Interconnect) {
+        let target = self.load_next_word_bump_pc(interconnect);
         let addr = self.registers.pc - 1;
         self.stack_push_word(addr);
         self.registers.pc = target;
@@ -880,37 +850,9 @@ impl fmt::Debug for Cpu {
     }
 }
 
-impl Cpu {
-    fn debug_print(&mut self, cart: &mut Cartridge, op: u8) -> String {
-        let pc = self.registers.pc;
-        let debug_string = match op {
-            // 2 byte instructions
-              0x69 | 0x65 | 0x75 | 0x61 | 0x71 | 0x29 | 0x25 | 0x35 | 0x21 | 0x31 | 0x06 | 0x16
-            | 0x90 | 0xB0 | 0xF0 | 0x24 | 0x30 | 0xD0 | 0x10 | 0x50 | 0x70 | 0xC9 | 0xC5 | 0xD5
-            | 0xC1 | 0xD1 | 0xE0 | 0xE4 | 0xC0 | 0xC4 | 0xC6 | 0xD6 | 0x49 | 0x45 | 0x55 | 0x41
-            | 0x51 | 0xE6 | 0xF6 | 0xA9 | 0xA5 | 0xB5 | 0xA1 | 0xB1 | 0xA2 | 0xA6 | 0xB6 | 0xA0
-            | 0x46 | 0x56 | 0x09 | 0x05 | 0x15 | 0x01 | 0x11 | 0x26 | 0x36 | 0x66 | 0x76 | 0xE9
-            | 0xE5 | 0xF5 | 0xE1 | 0xF1 | 0x85 | 0x95 | 0x81 | 0x91 | 0x86 | 0x96 | 0x84 | 0x94
-            | 0xA4 | 0xB4 => {
-                format!("{:02X} {:02X}{:3}", op, self.fetch_byte(cart, pc), " ")
-            }
-
-            // 3 byte instructions
-              0x6D | 0x7D | 0x79 | 0x2D | 0x3D | 0x39 | 0x0E | 0x1E | 0x2C | 0xCD | 0xDD | 0xD9
-            | 0xEC | 0xCC | 0xCE | 0xDE | 0x4D | 0x5D | 0x59 | 0xEE | 0xFE | 0x4C | 0x6C | 0x20
-            | 0xAD | 0xBD | 0xB9 | 0xAE | 0xBE | 0xAC | 0xBC | 0x4E | 0x5E | 0x0D | 0x1D | 0x19
-            | 0x2E | 0x3E | 0x6E | 0x7E | 0xED | 0xFD | 0xF9 | 0x8D | 0x9D | 0x99 | 0x8E | 0x8C => {
-                format!(
-                    "{:02X} {:02X} {:02X}",
-                    op,
-                    self.fetch_byte(cart, pc),
-                    self.fetch_byte(cart, pc + 1)
-                )
-            }
-
-            // 1 byte instructions
-            _ => format!("{:02X}{:6}", op, " "),
-        };
-        debug_string
+impl fmt::Debug for Registers {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X}",
+               self.a, self.x, self.y, self.p, self.s)
     }
 }

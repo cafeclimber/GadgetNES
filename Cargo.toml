@@ -7,3 +7,4 @@ authors = ["Ryan Campbell <rdcampbell@tamu.edu>"]
 bitflags = "1.0"
 nom="^3.2"
 clap="^2.31"
+sdl2="0.31"
